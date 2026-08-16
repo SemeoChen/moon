@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Noto+Serif+TC:wght@500;600;700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-noto-sans: 'Noto Sans TC', sans-serif;
+  --font-noto-serif: 'Noto Serif TC', serif;
+}
+
+body {
+  font-family: var(--font-noto-sans);
+  background-color: #fdfbf7;
+  color: #292524;
+  overflow-x: hidden;
+}
+
+/* 佳節特色燈暈背景紋理 */
+.bg-moon-pattern {
+  background-color: #fcf9f2;
+  background-image: radial-gradient(#e58519 0.6px, transparent 0.6px), radial-gradient(#1b4d3e 0.6px, #fcf9f2 0.6px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+/* 玻璃擬態邊框與光澤 */
+.glass-panel {
+  background: rgba(255, 253, 245, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(245, 170, 65, 0.25);
+}
+
+/* 按鈕流光動畫 */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.btn-shimmer {
+  background: linear-gradient(90deg, #c5610d 0%, #f5aa41 50%, #c5610d 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
+}
