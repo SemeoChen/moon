@@ -4,10 +4,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // 檢查基礎必填欄位
-    if (!body.recipientName || !body.recipientPhone || !body.recipientAddress) {
+    // 檢查基礎必填欄位 (取件人姓名、取件人手機、取件門市)
+    if (!body.recipientName || !body.recipientPhone || (!body.storeCode && !body.storeName)) {
       return NextResponse.json(
-        { success: false, message: '請填寫完整的收件人姓名、電話與地址' },
+        { success: false, message: '請填寫完整的取件人姓名、手機與 7-11 門市資訊' },
         { status: 400 }
       );
     }
