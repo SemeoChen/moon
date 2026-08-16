@@ -39,15 +39,20 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-amber-200/60 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-gradient-to-tr from-amber-700 via-amber-600 to-amber-500 rounded-full flex items-center justify-center text-white font-serif font-bold text-lg shadow-md border-2 border-amber-200">
-              妮Ｘ歐
+            <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-amber-300 shadow-md shrink-0 bg-amber-100">
+              <Image
+                src="/images/LOGO.png"
+                alt="妮邦廚房 Ｘ 歐伯芒果"
+                fill
+                className="object-contain p-0.5"
+              />
             </div>
             <div>
               <h1 className="text-lg sm:text-xl font-serif font-bold text-amber-950 tracking-tight">
                 妮邦廚房 Ｘ 歐伯芒果
               </h1>
               <p className="text-xs text-amber-700 font-medium">
-                2026 中秋限量聯名禮盒預購系統
+                2026 中秋聯名禮盒預購系統
               </p>
             </div>
           </div>
@@ -84,11 +89,11 @@ export default function Home() {
 
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-black text-amber-950 leading-tight">
                 妮邦廚房 Ｘ 歐伯芒果<br />
-                <span className="text-amber-700 font-serif">用真材實料，送真誠心意</span>
+                <span className="text-amber-700 font-serif">用真材實料，送出一份真誠的心意</span>
               </h2>
 
               <p className="text-sm sm:text-base text-stone-700 max-w-xl mx-auto lg:mx-0 font-normal leading-relaxed">
-                今年中秋很不一樣！妮邦廚房 Ｘ 歐伯芒果 首次合作推出限量聯名禮盒。結合甜點師的細緻手藝，與官田在地馥郁果香的芒果巧克力，呈現出十足誠心誠意的中秋禮盒。
+                今年中秋很不一樣，妮邦廚房 Ｘ 歐伯芒果 首次合作推出限量聯名禮盒。結合甜點師的細緻手藝，與官田在地馥郁果香的芒果巧克力，呈現出十足誠心誠意的中秋禮盒。
               </p>
 
               {/* 折扣亮點卡片 */}
@@ -113,7 +118,7 @@ export default function Home() {
               {/* 7-11 冷凍免運標籤 */}
               <div className="p-3 bg-amber-100/80 border border-amber-300 rounded-xl text-amber-900 text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start space-x-2">
                 <Truck className="w-5 h-5 text-amber-700 shrink-0" />
-                <span>全台 7-11 店到店冷凍配送！單筆訂單滿 <strong>$5,000 即享免運</strong>（預計 9/1 起出貨）</span>
+                <span>全台 7-11 店到店冷凍配送！單筆訂單滿 <strong>$5,000 即享免運</strong>（預計 9/1 順序陸續出貨）</span>
               </div>
 
               {/* 行動按鈕 */}
@@ -131,7 +136,7 @@ export default function Home() {
                   className="w-full sm:w-auto px-6 py-4 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 font-bold text-sm rounded-2xl transition shadow-sm flex items-center justify-center space-x-2"
                 >
                   <PhoneCall className="w-4 h-4 text-amber-700" />
-                  <span>大宗團購 0989518831</span>
+                  <span>大量訂購請另洽 0989518831</span>
                 </a>
               </div>
             </div>
@@ -149,10 +154,10 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto mb-10">
             <h3 className="text-2xl sm:text-3xl font-serif font-bold text-amber-950">
-              中秋聯名禮盒內容介紹
+              中秋聯名禮盒內容（原價 $692／盒）
             </h3>
-            <p className="text-stone-600 text-xs sm:text-sm mt-1">
-              原價 $692／盒 ‧ 每一道手作糕點皆承載滿滿誠意
+            <p className="text-stone-600 text-xs sm:text-sm mt-1 font-medium">
+              這一次就把今年最真摯的心意，好好裝進一盒手作甜點裡。（手工限量製作，售完為止）
             </p>
           </div>
 
@@ -170,14 +175,14 @@ export default function Home() {
                 嚴選新鮮雞蛋、法國發酵奶油與台灣在地麵粉，鋪上滿滿杏仁片手工細烤。薄脆金黃、堅果香氣濃郁，入口輕盈酥脆，越嚼越香。
               </p>
               <div className="pt-2 text-xs font-semibold text-amber-800">
-                ✨ 金黃薄脆 ‧ 堅果濃香
+                ✨ 薄脆金黃 ‧ 越嚼越香
               </div>
             </div>
 
             {/* 2. 芒果恰克 */}
             <div className="bg-amber-50/50 p-6 rounded-3xl border-2 border-amber-300 shadow-md space-y-3 relative overflow-hidden group hover:border-amber-500 transition duration-300">
               <div className="absolute top-3 right-3 bg-amber-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                官田在地特色
+                官田在地果香
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-600 text-white flex items-center justify-center font-serif font-bold text-xl shadow">
                 2
@@ -187,7 +192,7 @@ export default function Home() {
                 <span>芒果恰克</span>
               </h4>
               <p className="text-xs sm:text-sm text-stone-700 leading-relaxed">
-                選用台灣在地小農 75% 濃醇黑巧克力，巧搭厚實微酸、Q 彈有勁的芒果乾。深邃苦甜與自然果酸在舌尖交織，是成熟優雅的大人系風味。
+                選用台灣在地小農75% 濃醇黑巧克力，巧搭厚實微酸、Q 彈有勁的芒果乾。深邃苦甜與自然果酸在舌尖交織，是成熟優雅的大人系風味。
               </p>
               <div className="pt-2 text-xs font-semibold text-amber-800">
                 ✨ 75%黑巧 Ｘ 官田芒果乾
@@ -237,7 +242,7 @@ export default function Home() {
               </div>
               <div className="flex items-center space-x-2">
                 <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>妮邦廚房依法免用統一發票</span>
+                <span>妮邦廚房依法免開統一發票</span>
               </div>
             </div>
           </div>
@@ -251,7 +256,7 @@ export default function Home() {
             中秋聯名禮盒線上預訂
           </h2>
           <p className="text-stone-600 text-xs sm:text-sm mt-1">
-            請選擇訂購盒數並填寫收件資訊，通過圖形驗證即可成功送出預訂。
+            請輸入取件人姓名、手機號碼與 7-11 門市店號，通過圖形驗證即可成功送出預訂。
           </p>
         </div>
 
@@ -331,14 +336,23 @@ export default function Home() {
       {/* 頁尾 Footer */}
       <footer className="mt-auto bg-amber-950 text-amber-100 py-10 pb-24 md:pb-10 border-t-4 border-amber-600">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between text-center md:text-left space-y-6 md:space-y-0">
-          <div>
-            <div className="flex items-center justify-center md:justify-start space-x-2 text-xl font-serif font-bold text-white">
-              <Heart className="w-5 h-5 text-amber-400 fill-amber-400" />
-              <span>妮邦廚房 Ｘ 歐伯芒果 中秋聯名禮盒</span>
+          <div className="flex items-center justify-center md:justify-start space-x-3">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-amber-400 shrink-0 bg-amber-100">
+              <Image
+                src="/images/LOGO.png"
+                alt="妮邦廚房 Ｘ 歐伯芒果"
+                fill
+                className="object-contain p-0.5"
+              />
             </div>
-            <p className="text-xs text-amber-300/80 mt-1">
-              用真材實料，送出一份真誠的心意 ‧ 版權所有 © 2026 Nibang Kitchen
-            </p>
+            <div>
+              <div className="text-lg font-serif font-bold text-white">
+                妮邦廚房 Ｘ 歐伯芒果 中秋聯名禮盒
+              </div>
+              <p className="text-xs text-amber-300/80 mt-0.5">
+                這一次就把今年最真摯的心意，好好裝進一盒手作甜點裡。
+              </p>
+            </div>
           </div>
 
           <div className="text-xs text-amber-200/90 space-y-1">

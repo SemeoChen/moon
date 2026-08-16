@@ -1,22 +1,23 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Captcha } from './Captcha';
-import { TAIWAN_CITIES } from '../data/taiwanDistricts';
 import { OrderFormData } from '../types/order';
+import sevenElevenStoresData from '../data/sevenElevenStores.json';
 import {
   ShoppingBag,
   Truck,
   CheckCircle2,
   Calendar,
-  Clock,
   UserCheck,
   PhoneCall,
   AlertCircle,
-  FileText,
   Loader2,
-  Gift,
-  Sparkles
+  Sparkles,
+  ExternalLink,
+  Store,
+  FileText,
+  MapPin
 } from 'lucide-react';
 
 const ORIGINAL_PRICE = 692; // 原價
@@ -25,29 +26,51 @@ const DISCOUNT_5_8 = 588;   // 5~8 盒 85 折
 const SHIPPING_FEE = 129;   // 7-11 冷凍配送運費
 const FREE_SHIPPING_THRESHOLD = 5000; // 滿 $5,000 免運費
 
+interface StoreItem {
+  id: string;
+  name: string;
+  rawName: string;
+  address: string;
+}
+
+type StoreDataset = Record<string, Record<string, StoreItem[]>>;
+const STORES_DB = sevenElevenStoresData as StoreDataset;
+
 export const OrderForm: React.FC = () => {
   // 盒數與訂購細節
   const [quantity, setQuantity] = useState<number>(1);
 
-  // 地址選單
-  const [selectedCity, setSelectedCity] = useState<string>('臺北市');
-  const [selectedDistrict, setSelectedDistrict] = useState<string>('信義區');
-  const [streetAddress, setStreetAddress] = useState<string>('');
-
-  // 客服與收件資訊
+  // 取件人資訊
   const [recipientName, setRecipientName] = useState<string>('');
   const [recipientPhone, setRecipientPhone] = useState<string>('');
-  const [recipientTel, setRecipientTel] = useState<string>('');
+
+  // 7-11 門市三級選單 (縣市, 行政區, 門市)
+  const cityList = useMemo(() => Object.keys(STORES_DB), []);
+  const [selectedCity, setSelectedCity] = useState<string>('臺北市');
+
+  const districtList = useMemo(() => {
+    return STORES_DB[selectedCity] ? Object.keys(STORES_DB[selectedCity]) : [];
+  }, [selectedCity]);
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('信義區');
+
+  const storeOptions = useMemo(() => {
+    if (STORES_DB[selectedCity] && STORES_DB[selectedCity][selectedDistrict]) {
+      return STORES_DB[selectedCity][selectedDistrict];
+    }
+    return [];
+  }, [selectedCity, selectedDistrict]);
+
+  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
+  const [storeCode, setStoreCode] = useState<string>('');
+  const [storeName, setStoreName] = useState<string>('');
+  const [storeAddress, setStoreAddress] = useState<string>('');
+
+  // 配送與備註
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-
-  // 配送與出貨日期
-  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState<string>('1'); // 1: 不指定, 2: 13時前, 3: 14~18時
-  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>('');
-
-  // 免用統一發票收據選項
-  const [invoiceType, setInvoiceType] = useState<'personal' | 'company' | 'donation'>('personal');
-  const [taxId, setTaxId] = useState<string>('');
+  const [needReceipt, setNeedReceipt] = useState<boolean>(false);
+  const [receiptTitle, setReceiptTitle] = useState<string>('');
 
   // 圖形驗證碼
   const [correctCaptcha, setCorrectCaptcha] = useState<string>('');
@@ -59,27 +82,56 @@ export const OrderForm: React.FC = () => {
   const [completedOrder, setCompletedOrder] = useState<{
     orderId: string;
     totalAmount: number;
-    subtotal: number;
+    orderAmount: number;
     shippingFee: number;
     quantity: number;
     recipientName: string;
     recipientPhone: string;
-    recipientAddress: string;
+    storeCode: string;
+    storeName: string;
+    storeAddress: string;
+    expectedDeliveryDate: string;
   } | null>(null);
 
-  // 當前縣市對應的行政區清單
-  const currentDistricts = useMemo(() => {
-    const city = TAIWAN_CITIES.find((c) => c.name === selectedCity);
-    return city ? city.districts : [];
-  }, [selectedCity]);
+  // 當縣市變更時，自動更新行政區
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCity = e.target.value;
+    setSelectedCity(newCity);
+    const districts = STORES_DB[newCity] ? Object.keys(STORES_DB[newCity]) : [];
+    if (districts.length > 0) {
+      setSelectedDistrict(districts[0]);
+    }
+  };
 
-  // 當前選中的郵遞區號
-  const currentZipCode = useMemo(() => {
-    const dist = currentDistricts.find((d) => d.name === selectedDistrict);
-    return dist ? dist.zip : '';
-  }, [currentDistricts, selectedDistrict]);
+  // 當行政區或縣市變更時，自動預設第一間門市或重置選擇
+  useEffect(() => {
+    if (storeOptions && storeOptions.length > 0) {
+      const firstStore = storeOptions[0];
+      setSelectedStoreId(firstStore.id);
+      setStoreCode(firstStore.id);
+      setStoreName(firstStore.name);
+      setStoreAddress(firstStore.address);
+    } else {
+      setSelectedStoreId('');
+      setStoreCode('');
+      setStoreName('');
+      setStoreAddress('');
+    }
+  }, [storeOptions]);
 
-  // 自動計算單價、產品小計、運費與最終總額
+  // 當選擇門市選單改變時，自動寫入代碼與店名
+  const handleStoreSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const targetId = e.target.value;
+    setSelectedStoreId(targetId);
+    const found = storeOptions.find((s) => s.id === targetId);
+    if (found) {
+      setStoreCode(found.id);
+      setStoreName(found.name);
+      setStoreAddress(found.address);
+    }
+  };
+
+  // 自動計算單價、商品金額、運費與最終總額
   const pricingInfo = useMemo(() => {
     let unitPrice = ORIGINAL_PRICE;
     let discountText = '原價';
@@ -95,15 +147,15 @@ export const OrderForm: React.FC = () => {
       discountText = '大量訂購專屬價';
     }
 
-    const subtotal = quantity * unitPrice;
-    const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
-    const shippingFee = isFreeShipping ? 0 : SHIPPING_FEE;
-    const totalAmount = subtotal + shippingFee;
-    const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
+    const orderAmount = quantity * unitPrice; // 商品小計
+    const isFreeShipping = orderAmount >= FREE_SHIPPING_THRESHOLD;
+    const shippingFee = isFreeShipping ? 0 : SHIPPING_FEE; // 運費金額
+    const totalAmount = orderAmount + shippingFee; // 總金額
+    const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - orderAmount);
 
     return {
       unitPrice,
-      subtotal,
+      orderAmount,
       shippingFee,
       totalAmount,
       discountText,
@@ -112,38 +164,42 @@ export const OrderForm: React.FC = () => {
     };
   }, [quantity]);
 
-  // 處理切換縣市
-  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newCity = e.target.value;
-    setSelectedCity(newCity);
-    const cityObj = TAIWAN_CITIES.find((c) => c.name === newCity);
-    if (cityObj && cityObj.districts.length > 0) {
-      setSelectedDistrict(cityObj.districts[0].name);
-    }
-  };
-
   // 檢查並送出表單
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    // 表單基礎驗證
+    // 1. 取件人姓名驗證 (不可超過5個中文字)
     if (!recipientName.trim()) {
-      setErrorMessage('請填寫收件人姓名');
+      setErrorMessage('請填寫取件人姓名');
       return;
     }
 
-    if (!recipientPhone.trim()) {
-      setErrorMessage('請填寫收件人手機號碼');
+    if (recipientName.trim().length > 10) {
+      setErrorMessage('取件人姓名請勿超過 5 個中文字 (10 碼)');
       return;
     }
 
-    if (!streetAddress.trim()) {
-      setErrorMessage('請填寫完整收件地址（7-11取貨門市或住宅地址）');
+    // 2. 取件人手機驗證 (10碼數字)
+    const cleanPhone = recipientPhone.replace(/-/g, '').trim();
+    if (!cleanPhone || !/^09\d{8}$/.test(cleanPhone)) {
+      setErrorMessage('請填寫正確的 10 位數手機號碼 (例如: 0912345678)');
       return;
     }
 
-    // 驗證碼比對
+    // 3. 7-11 門市代碼驗證
+    const cleanStoreCode = storeCode.trim();
+    if (!cleanStoreCode) {
+      setErrorMessage('請選擇 7-11 取件門市');
+      return;
+    }
+
+    if (!storeName.trim()) {
+      setErrorMessage('請選擇 7-11 取件門市店名');
+      return;
+    }
+
+    // 4. 圖形驗證碼比對
     if (!captchaInput.trim() || captchaInput.trim().toUpperCase() !== correctCaptcha.toUpperCase()) {
       setErrorMessage('圖形驗證碼輸入錯誤，請重新確認或點擊「換一張」');
       return;
@@ -151,53 +207,44 @@ export const OrderForm: React.FC = () => {
 
     setIsSubmitting(true);
 
-    const fullAddress = `${currentZipCode} ${selectedCity}${selectedDistrict}${streetAddress.trim()}`;
-    
     // 自動產生 12 碼訂單編號
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const generatedOrderId = `NB${dateStr}${randomSuffix}`;
 
+    // 格式化當天日期 YYYY/MM/DD
+    const orderDateStr = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
+
+    // 組合商品備註 (門市中文 + 希望送達日期 + 訂購盒數 + 收據抬頭/客人備註)
+    let compiledItemNotes = `【取件門市: ${storeName.trim()} (${cleanStoreCode})】 【送達日期: ${expectedDeliveryDate || '未指定'}】 【訂購盒數: ${quantity}盒】`;
+    if (needReceipt && receiptTitle.trim()) {
+      compiledItemNotes += ` 【需免用發票收據 抬頭:${receiptTitle.trim()}】`;
+    }
+    if (notes.trim()) {
+      compiledItemNotes += ` 【備註: ${notes.trim()}】`;
+    }
+
     const orderData: OrderFormData = {
       quantity,
-      totalAmount: pricingInfo.totalAmount,
       unitPrice: pricingInfo.unitPrice,
       discountRateText: pricingInfo.discountText,
+      orderAmount: pricingInfo.orderAmount,
+      shippingFee: pricingInfo.shippingFee,
+      totalAmount: pricingInfo.totalAmount,
 
       recipientName: recipientName.trim(),
-      recipientTel: recipientTel.trim() || recipientPhone.trim(),
-      recipientPhone: recipientPhone.trim(),
-      city: selectedCity,
-      district: selectedDistrict,
-      streetAddress: streetAddress.trim(),
-      recipientAddress: fullAddress,
+      recipientPhone: cleanPhone,
+      storeCode: cleanStoreCode,
+      storeName: storeName.trim(),
 
-      codAmount: '到付', // 7-11 貨到付款
-      productCode: '2', // 中秋禮盒
-      productDesc: `妮邦廚房X歐伯芒果中秋聯名禮盒 ${quantity} 盒 (運費:$${pricingInfo.shippingFee})`,
-      deliveryTimeSlot,
-      shippingDate: '2026/09/01', // 預計 9/1 順序陸續出貨
-      expectedDeliveryDate,
-      tempZone: '2', // 冷凍配送
-      packageSize: '2', // 90cm
-      insuranceAmount: '',
+      tempZone: '冷凍', // 固定為冷凍
+      productName: '中秋聯名禮盒', // 固定為中秋聯名禮盒
+      orderDate: orderDateStr,
+      expectedDeliveryDate: expectedDeliveryDate || '預計9/1起陸續出貨',
       notes: notes.trim(),
+      itemNotes: compiledItemNotes,
 
-      invoiceType,
-      taxId: invoiceType === 'company' ? taxId.trim() : '',
-      mobileCarrier: '',
-      loveCode: '',
-      isPrint: 'N',
-      isDonate: 'N',
-
-      senderName: '妮邦廚房 Ｘ 歐伯芒果',
-      senderTel: '0989518831',
-      senderPhone: '0989518831',
-      senderAddress: '台南市官田區',
-
-      canCreditCard: 'N',
-      canMobilePay: 'N',
       email: email.trim(),
       captchaInput: captchaInput.trim(),
     };
@@ -215,12 +262,15 @@ export const OrderForm: React.FC = () => {
         setCompletedOrder({
           orderId: generatedOrderId,
           totalAmount: pricingInfo.totalAmount,
-          subtotal: pricingInfo.subtotal,
+          orderAmount: pricingInfo.orderAmount,
           shippingFee: pricingInfo.shippingFee,
           quantity,
           recipientName: recipientName.trim(),
-          recipientPhone: recipientPhone.trim(),
-          recipientAddress: fullAddress,
+          recipientPhone: cleanPhone,
+          storeCode: cleanStoreCode,
+          storeName: storeName.trim(),
+          storeAddress: storeAddress,
+          expectedDeliveryDate: expectedDeliveryDate || '9/1 起順序陸續出貨',
         });
       } else {
         setErrorMessage(resData.message || '訂單送出失敗，請稍後再試。');
@@ -230,12 +280,15 @@ export const OrderForm: React.FC = () => {
       setCompletedOrder({
         orderId: generatedOrderId,
         totalAmount: pricingInfo.totalAmount,
-        subtotal: pricingInfo.subtotal,
+        orderAmount: pricingInfo.orderAmount,
         shippingFee: pricingInfo.shippingFee,
         quantity,
         recipientName: recipientName.trim(),
-        recipientPhone: recipientPhone.trim(),
-        recipientAddress: fullAddress,
+        recipientPhone: cleanPhone,
+        storeCode: cleanStoreCode,
+        storeName: storeName.trim(),
+        storeAddress: storeAddress,
+        expectedDeliveryDate: expectedDeliveryDate || '9/1 起順序陸續出貨',
       });
     } finally {
       setIsSubmitting(false);
@@ -249,18 +302,18 @@ export const OrderForm: React.FC = () => {
         {/* 表單 Header */}
         <div className="border-b border-amber-100 pb-6">
           <div className="flex items-center space-x-3 text-amber-700 font-semibold text-sm mb-1">
-            <ShoppingBag className="w-5 h-5" />
+            <ShoppingBag className="w-5 h-5 text-amber-700" />
             <span>妮邦廚房 Ｘ 歐伯芒果 2026 中秋線上預購系統</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-950">
             中秋聯名禮盒線上預訂單
           </h2>
           <p className="text-stone-600 text-xs sm:text-sm mt-1">
-            全台 7-11 店到店冷凍配送！單筆訂單滿 <strong className="text-amber-800">$5,000 即享免運</strong>，寄貨付款方式為 <strong className="text-amber-800">7-11 貨到付款 (到付)</strong>。
+            選擇 7-11 門市自動帶入店號代碼！單筆訂單滿 <strong className="text-amber-800">$5,000 即享免運</strong>，付款方式為 <strong className="text-amber-800">7-11 貨到付款 (到付)</strong>。
           </p>
         </div>
 
-        {/* 1. 盒數選擇與價格階梯計算卡片 */}
+        {/* 1. 盒數選擇與金額計算卡片 */}
         <div className="bg-amber-50/70 p-5 sm:p-6 rounded-2xl border border-amber-200 space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-base font-bold text-amber-950 flex items-center space-x-2">
@@ -306,21 +359,21 @@ export const OrderForm: React.FC = () => {
             </button>
           </div>
 
-          {/* 免運門檻進度條提醒 */}
+          {/* 免運門檻提醒條 */}
           <div className="p-3.5 rounded-xl bg-white border border-amber-200 text-xs sm:text-sm">
             {pricingInfo.isFreeShipping ? (
               <div className="flex items-center space-x-2 text-emerald-700 font-bold">
                 <Sparkles className="w-4 h-4 text-emerald-600 animate-bounce" />
-                <span>已達到 NT$ 5,000 門檻！恭喜享有全台 7-11 冷凍免運優惠！</span>
+                <span>已滿 NT$ 5,000 門檻！恭喜享有全台 7-11 冷凍免運優惠！</span>
               </div>
             ) : (
               <div className="flex items-center justify-between text-stone-700">
                 <div className="flex items-center space-x-1">
                   <Truck className="w-4 h-4 text-amber-700 shrink-0" />
-                  <span>全台 7-11 冷凍運費：<strong className="text-amber-800">NT$ 129</strong></span>
+                  <span>7-11 店到店冷凍運費：<strong className="text-amber-800">NT$ 129</strong></span>
                 </div>
                 <div className="text-amber-800 font-medium text-xs">
-                  再加購 <strong className="font-bold underline text-amber-900">NT$ {pricingInfo.remainingForFreeShipping.toLocaleString()}</strong> 即可免運！
+                  再加購 <strong className="font-bold underline text-amber-900">NT$ {pricingInfo.remainingForFreeShipping.toLocaleString()}</strong> 享免運！
                 </div>
               </div>
             )}
@@ -343,13 +396,13 @@ export const OrderForm: React.FC = () => {
           {/* 應付金額試算卡片 */}
           <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-amber-200 mt-4 shadow-sm">
             <div className="text-xs sm:text-sm text-stone-700 space-y-1 mb-2 sm:mb-0 w-full sm:w-auto">
-              <div>品名：<span className="font-semibold text-amber-900">妮邦廚房 Ｘ 歐伯芒果 中秋聯名禮盒</span></div>
+              <div>商品：<span className="font-semibold text-amber-900">中秋聯名禮盒 (溫層: 冷凍)</span></div>
               <div className="text-stone-500">
-                商品金額：NT$ {pricingInfo.subtotal.toLocaleString()} ＋ 冷凍運費：{pricingInfo.isFreeShipping ? <span className="text-emerald-600 font-bold">免運 ($0)</span> : `NT$ ${SHIPPING_FEE}`}
+                商品小計：NT$ {pricingInfo.orderAmount.toLocaleString()} ＋ 冷凍運費：{pricingInfo.isFreeShipping ? <span className="text-emerald-600 font-bold">免運 ($0)</span> : `NT$ ${SHIPPING_FEE}`}
               </div>
             </div>
             <div className="text-right w-full sm:w-auto">
-              <div className="text-xs text-stone-500">應付總金額 (7-11 貨到付款)</div>
+              <div className="text-xs text-stone-500">應付總金額 (7-11 到付)</div>
               <div className="text-2xl font-extrabold text-amber-700 font-serif">
                 NT$ {pricingInfo.totalAmount.toLocaleString()}
               </div>
@@ -357,21 +410,22 @@ export const OrderForm: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. 收件人完整資料 */}
+        {/* 2. 取件人與 7-11 全國門市對照選擇 (賣貨便匯入格式) */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-amber-950 flex items-center space-x-2 border-b border-amber-100 pb-2">
             <UserCheck className="w-5 h-5 text-amber-700" />
-            <span>1. 收件人基本資料</span>
+            <span>1. 取件人與 7-11 門市選單 (自動對照店號代碼)</span>
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                收件人姓名 <span className="text-red-500">*</span>
+                取件人姓名 <span className="text-red-500">* (上限 5 個中文字)</span>
               </label>
               <input
                 type="text"
                 required
+                maxLength={10}
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
                 placeholder="例如：王小明"
@@ -381,34 +435,137 @@ export const OrderForm: React.FC = () => {
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                收件人手機 <span className="text-red-500">*</span>
+                取件人手機 <span className="text-red-500">* (10碼數字，請勿含「-」)</span>
               </label>
               <input
                 type="tel"
                 required
+                maxLength={10}
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
                 placeholder="例如：0912345678"
                 className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
               />
             </div>
+          </div>
+
+          {/* 全國 7-11 門市三級選擇器 */}
+          <div className="space-y-3 pt-2 bg-amber-50/50 p-4 rounded-2xl border border-amber-200">
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-bold text-amber-950 flex items-center space-x-1.5">
+                <Store className="w-4 h-4 text-amber-700" />
+                <span>7-11 全國門市對照選單</span>
+                <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-normal">
+                  自動填入門市代碼與名稱
+                </span>
+              </label>
+              <a
+                href="https://emap.pcsc.com.tw/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-amber-800 hover:text-amber-950 font-bold underline flex items-center space-x-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>外部電子地圖查詢</span>
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-600 mb-1">1. 選擇縣市</label>
+                <select
+                  value={selectedCity}
+                  onChange={handleCityChange}
+                  className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                >
+                  {cityList.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-600 mb-1">2. 選擇鄉鎮市區</label>
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => setSelectedDistrict(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                >
+                  {districtList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                市話電話 (選填)
+              <label className="block text-[11px] font-semibold text-stone-600 mb-1">
+                3. 選擇 7-11 門市 ({storeOptions.length} 家門市供選擇)
+              </label>
+              <select
+                value={selectedStoreId}
+                onChange={handleStoreSelectChange}
+                className="w-full px-3.5 py-2.5 bg-white border-2 border-amber-400 rounded-xl text-base sm:text-sm font-bold text-amber-950 focus:ring-2 focus:ring-amber-500"
+              >
+                {storeOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} (店號: {s.id}) - {s.address}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 即時已選門市卡片顯示 */}
+            {storeCode && (
+              <div className="p-3 bg-white rounded-xl border border-amber-300 space-y-1 text-xs text-stone-700 shadow-sm mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-900 text-sm flex items-center space-x-1">
+                    <MapPin className="w-4 h-4 text-amber-700" />
+                    <span>已選取門市：{storeName}</span>
+                  </span>
+                  <span className="font-mono bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold">
+                    門市店號代碼：{storeCode}
+                  </span>
+                </div>
+                {storeAddress && (
+                  <div className="text-stone-500 pl-5">門市地址：{storeAddress}</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3. 送達日期與 Email 通知 */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-bold text-amber-950 flex items-center space-x-2 border-b border-amber-100 pb-2">
+            <Truck className="w-5 h-5 text-amber-700" />
+            <span>2. 配送與聯絡偏好</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center space-x-1">
+                <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                <span>希望送達日期 (選填)</span>
               </label>
               <input
-                type="tel"
-                value={recipientTel}
-                onChange={(e) => setRecipientTel(e.target.value)}
-                placeholder="例如：0223456789"
-                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
+                type="date"
+                value={expectedDeliveryDate}
+                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-amber-500"
               />
+              <span className="text-[11px] text-amber-800 mt-1 block font-medium">
+                📦 預計 9/1 起依照訂單順序陸續出貨
+              </span>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                電子信箱 Email (填寫將寄送訂單確認信)
+                寄件人/買家 Email (填寫將寄送訂單確認信)
               </label>
               <input
                 type="email"
@@ -420,102 +577,21 @@ export const OrderForm: React.FC = () => {
             </div>
           </div>
 
-          {/* 台灣地址選單 */}
-          <div className="space-y-2 pt-2">
-            <label className="block text-xs font-bold text-stone-700">
-              收件地址 / 7-11門市資訊 <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <select
-                value={selectedCity}
-                onChange={handleCityChange}
-                className="px-3 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
-              >
-                {TAIWAN_CITIES.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedDistrict}
-                onChange={(e) => setSelectedDistrict(e.target.value)}
-                className="px-3 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
-              >
-                {currentDistricts.map((d) => (
-                  <option key={d.name} value={d.name}>
-                    {d.name} ({d.zip})
-                  </option>
-                ))}
-              </select>
-
-              <div className="col-span-2 sm:col-span-1 flex items-center justify-center sm:justify-start px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-900">
-                郵遞區號：{currentZipCode}
-              </div>
-            </div>
-
-            <input
-              type="text"
-              required
-              value={streetAddress}
-              onChange={(e) => setStreetAddress(e.target.value)}
-              placeholder="請填寫 7-11 門市名稱與地址，或住宅街道樓層"
-              className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm mt-2"
-            />
-          </div>
-        </div>
-
-        {/* 3. 物流與出貨日程 */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-amber-950 flex items-center space-x-2 border-b border-amber-100 pb-2">
-            <Truck className="w-5 h-5 text-amber-700" />
-            <span>2. 配送與備註選項</span>
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center space-x-1">
-                <Clock className="w-3.5 h-3.5 text-amber-700" />
-                <span>希望配達時段 (7-11冷凍/黑貓參數)</span>
-              </label>
-              <select
-                value={deliveryTimeSlot}
-                onChange={(e) => setDeliveryTimeSlot(e.target.value)}
-                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="1">1: 不指定</option>
-                <option value="2">2: 13時前</option>
-                <option value="3">3: 14時~18時</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center space-x-1">
-                <Calendar className="w-3.5 h-3.5 text-amber-700" />
-                <span>出貨時間說明</span>
-              </label>
-              <div className="px-3.5 py-3 sm:py-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-xs sm:text-sm font-bold text-amber-900">
-                📦 預計 9/1 起依照訂單順序陸續出貨
-              </div>
-            </div>
-          </div>
-
           <div>
             <label className="block text-xs font-bold text-stone-700 mb-1">
-              訂單備註 (選填)
+              商品備註 (選填)
             </label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="如有特殊需求、7-11店號或贈禮卡片備註請在此填寫"
+              placeholder="如有特殊需求或贈禮卡片說明請在此填寫 (將寫入匯入檔之商品備註內)"
               className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl text-base sm:text-sm focus:bg-white focus:ring-2 focus:ring-amber-500"
             />
           </div>
         </div>
 
-        {/* 3. 發票說明 (妮邦廚房依法免開統一發票) */}
+        {/* 4. 發票說明 (妮邦廚房依法免開統一發票) */}
         <div className="space-y-3 bg-amber-50/60 p-4 rounded-2xl border border-amber-200">
           <h3 className="text-base font-bold text-amber-950 flex items-center space-x-2">
             <FileText className="w-5 h-5 text-amber-700" />
@@ -527,29 +603,29 @@ export const OrderForm: React.FC = () => {
               💡 妮邦廚房依法為小規模營業人，免用統一發票。
             </p>
             <p>
-              本訂單依法免開立統一發票。如您或公司需「小規模營業人免用統一發票收據」（可作為報帳憑證），請於下方勾選或於「訂單備註」中註明需求。
+              本訂單依法免開立統一發票。如您或公司需「小規模營業人免用統一發票收據」（可作為報帳憑證），請於下方勾選。
             </p>
           </div>
 
           <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-amber-900 pt-1">
             <input
               type="checkbox"
-              checked={invoiceType === 'company'}
-              onChange={(e) => setInvoiceType(e.target.checked ? 'company' : 'personal')}
+              checked={needReceipt}
+              onChange={(e) => setNeedReceipt(e.target.checked)}
               className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
             />
             <span>需隨貨附上「免用統一發票收據」</span>
           </label>
 
-          {invoiceType === 'company' && (
+          {needReceipt && (
             <div className="pt-2">
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 收據抬頭 / 買方名稱 (選填)
               </label>
               <input
                 type="text"
-                value={taxId}
-                onChange={(e) => setTaxId(e.target.value)}
+                value={receiptTitle}
+                onChange={(e) => setReceiptTitle(e.target.value)}
                 placeholder="例如：妮邦股份有限公司"
                 className="w-full sm:w-1/2 px-3.5 py-2 bg-white border border-stone-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500"
               />
@@ -594,7 +670,7 @@ export const OrderForm: React.FC = () => {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-6 h-6 animate-spin text-amber-200" />
-                <span>訂單處理寫入中...</span>
+                <span>訂單寫入 Google Sheet 中...</span>
               </>
             ) : (
               <>
@@ -604,7 +680,7 @@ export const OrderForm: React.FC = () => {
             )}
           </button>
           <p className="text-center text-xs text-stone-500 mt-2">
-            送出訂單後系統將自動產生訂單編號並發送確認訊息。全台 7-11 到付冷凍配送。
+            送出訂單後將自動寫入相容「7-11 賣貨便」格式檔。全台 7-11 到付冷凍配送。
           </p>
         </div>
       </form>
@@ -618,7 +694,7 @@ export const OrderForm: React.FC = () => {
                 <CheckCircle2 className="w-10 h-10" />
               </div>
               <h3 className="text-2xl font-bold font-serif text-amber-950">
-                預訂成功！感謝您的支持
+                預訂成功！完成訂單
               </h3>
               <p className="text-sm text-stone-600">
                 我們已收到您的【妮邦廚房 Ｘ 歐伯芒果】中秋聯名禮盒預訂單。
@@ -637,8 +713,8 @@ export const OrderForm: React.FC = () => {
                 <span className="font-semibold">{completedOrder.quantity} 盒</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">商品金額小計：</span>
-                <span className="font-semibold">NT$ {completedOrder.subtotal.toLocaleString()}</span>
+                <span className="text-stone-500">商品小計：</span>
+                <span className="font-semibold">NT$ {completedOrder.orderAmount.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-stone-500">7-11 冷凍運費：</span>
@@ -651,12 +727,19 @@ export const OrderForm: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between pt-1">
-                <span className="text-stone-500">收件人：</span>
+                <span className="text-stone-500">取件人：</span>
                 <span className="font-semibold">{completedOrder.recipientName} ({completedOrder.recipientPhone})</span>
               </div>
               <div className="flex justify-between items-start">
-                <span className="text-stone-500 shrink-0">收件地址/門市：</span>
-                <span className="text-right text-xs max-w-[240px] font-medium">{completedOrder.recipientAddress}</span>
+                <span className="text-stone-500 shrink-0">7-11 取件門市：</span>
+                <div className="text-right font-medium text-amber-900 text-xs">
+                  <div>{completedOrder.storeName} (店號: {completedOrder.storeCode})</div>
+                  {completedOrder.storeAddress && <div className="text-[11px] text-stone-500">{completedOrder.storeAddress}</div>}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">希望送達日期：</span>
+                <span className="font-medium">{completedOrder.expectedDeliveryDate}</span>
               </div>
             </div>
 

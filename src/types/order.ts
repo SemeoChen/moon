@@ -1,49 +1,28 @@
 export interface OrderFormData {
   // 產品與金額
   quantity: number;
-  totalAmount: number;
   unitPrice: number;
   discountRateText: string;
+  orderAmount: number; // 商品金額小計
+  shippingFee: number; // 運費金額 (滿$5,000免運費為 0，否則為 129)
+  totalAmount: number; // 應付總金額 = orderAmount + shippingFee
 
-  // 收件者資訊
-  recipientName: string;
-  recipientTel: string;
-  recipientPhone: string;
-  city: string;
-  district: string;
-  streetAddress: string;
-  recipientAddress: string;
-  
-  // 物流與出貨細節 (對應 ezprint)
-  codAmount: string; // 代收金額或到付 (預設 "到付" 或 金額數字)
-  productCode: string; // 品名 (詳參數表 預設 2: 中秋禮盒)
-  productDesc: string; // 品名說明
-  deliveryTimeSlot: string; // 1: 不指定, 2: 13時前, 3: 14時~18時
-  shippingDate: string; // 出貨日期 (YYYY/MM/DD)
-  expectedDeliveryDate: string; // 預定配達日期 (YYYY/MM/DD)
-  tempZone: string; // 溫層: 1:常溫, 2:冷藏, 3:冷凍 (預設 1)
-  packageSize: string; // 尺寸: 1:60cm, 2:90cm, 3:120cm, 4:150cm (預設 2)
-  insuranceAmount: string; // 保值金額 (20001~10萬之間)
-  notes: string; // 備註
+  // 買家 / 收件人資訊 (賣貨便匯入格式)
+  recipientName: string; // 取件人姓名 (上限 5 個中文字)
+  recipientPhone: string; // 取件人手機 (10 碼數字，不含「-」)
+  storeCode: string; // 取件門市 (6 碼 7-11 門市店號)
+  storeName: string; // 取件門市中文名稱 (例如: 7-11 鑫昌門市)
 
-  // 發票與載具
-  invoiceType: 'personal' | 'company' | 'donation';
-  taxId: string; // 統一編號
-  mobileCarrier: string; // 手機載具
-  loveCode: string; // 愛心碼
-  isPrint: 'Y' | 'N';
-  isDonate: 'Y' | 'N';
+  // 賣貨便固定與選填欄位
+  tempZone: '冷凍'; // 溫層固定為 '冷凍'
+  productName: '中秋聯名禮盒'; // 商品固定為 '中秋聯名禮盒'
+  orderDate: string; // 買家下訂日期 (YYYY/MM/DD)
+  expectedDeliveryDate: string; // 希望送達日期 (YYYY/MM/DD)
+  notes: string; // 買家原始備註
+  itemNotes: string; // 商品備註 (包含門市中文、送達日期與訂購盒數)
 
-  // 寄件者資訊 (預設妮邦廚房)
-  senderName: string;
-  senderTel: string;
-  senderPhone: string;
-  senderAddress: string;
-
-  // 付款防禦與驗證
-  canCreditCard: 'Y' | 'N';
-  canMobilePay: 'Y' | 'N';
-  email: string;
+  // 聯絡與驗證
+  email: string; // 買家 EMAIL
   captchaInput: string;
 }
 
