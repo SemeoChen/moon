@@ -103,15 +103,13 @@ export default function Home() {
                   <div className="text-lg font-bold text-stone-800 line-through">NT$ 692</div>
                   <div className="text-[11px] text-amber-700">精緻典藏包裝</div>
                 </div>
-                <div className="bg-gradient-to-b from-amber-50 to-amber-100/80 p-3.5 rounded-2xl border-2 border-amber-400 shadow-sm text-center">
-                  <div className="text-xs font-bold text-amber-800">1~4 盒 9 折</div>
-                  <div className="text-xl font-black text-amber-700 font-serif">NT$ 622</div>
-                  <div className="text-[11px] text-amber-800">特惠 $622 / 盒</div>
+                <div className="bg-gradient-to-b from-amber-50 to-amber-100/80 p-3.5 rounded-2xl border-2 border-amber-400 shadow-sm text-center flex flex-col justify-center">
+                  <div className="text-xs font-bold text-amber-800">1~4 盒 優惠9 折</div>
+                  <div className="text-[11px] text-amber-800 mt-1 font-medium">特惠 $622 / 盒</div>
                 </div>
-                <div className="col-span-2 sm:col-span-1 bg-gradient-to-b from-amber-600 to-amber-800 text-white p-3.5 rounded-2xl shadow-md text-center">
-                  <div className="text-xs font-bold text-amber-200">5~8 盒 85 折</div>
-                  <div className="text-xl font-black font-serif text-white">NT$ 588</div>
-                  <div className="text-[11px] text-amber-200">特惠 $588 / 盒</div>
+                <div className="col-span-2 sm:col-span-1 bg-gradient-to-b from-amber-600 to-amber-800 text-white p-3.5 rounded-2xl shadow-md text-center flex flex-col justify-center">
+                  <div className="text-xs font-bold text-amber-200">5~8 盒 優惠85 折</div>
+                  <div className="text-[11px] text-amber-200 mt-1 font-medium">特惠 $588 / 盒</div>
                 </div>
               </div>
 

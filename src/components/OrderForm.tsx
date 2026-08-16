@@ -306,7 +306,7 @@ export const OrderForm: React.FC = () => {
             <span>妮邦廚房 Ｘ 歐伯芒果 2026 中秋線上預購系統</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-950">
-            中秋聯名禮盒線上預訂單
+            中秋聯名禮盒線上預訂
           </h2>
           <p className="text-stone-600 text-xs sm:text-sm mt-1">
             選擇 7-11 門市自動帶入店號代碼！單筆訂單滿 <strong className="text-amber-800">$5,000 即享免運</strong>，付款方式為 <strong className="text-amber-800">7-11 貨到付款 (到付)</strong>。
