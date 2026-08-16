@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Captcha } from './Captcha';
 import { OrderFormData } from '../types/order';
-import sevenElevenStoresData from '../data/sevenElevenStores.json';
+import sevenElevenStoresData from '@/data/sevenElevenStores.json';
 import {
   ShoppingBag,
   Truck,
