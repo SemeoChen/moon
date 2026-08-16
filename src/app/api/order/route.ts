@@ -4,10 +4,20 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // 檢查基礎必填欄位 (取件人姓名、取件人手機、取件門市)
-    if (!body.recipientName || !body.recipientPhone || (!body.storeCode && !body.storeName)) {
+    const isSelfPickup = body.deliveryMethod === 'self_pickup' || body.storeCode === '自取' || body.storeName === '現場自取';
+
+    // 檢查基礎必填欄位 (取件人姓名、取件人手機)
+    if (!body.recipientName || !body.recipientPhone) {
       return NextResponse.json(
-        { success: false, message: '請填寫完整的取件人姓名、手機與 7-11 門市資訊' },
+        { success: false, message: '請填寫完整的取件人姓名與手機' },
+        { status: 400 }
+      );
+    }
+
+    // 若非現場自取，需驗證 7-11 門市資訊
+    if (!isSelfPickup && (!body.storeCode || !body.storeName)) {
+      return NextResponse.json(
+        { success: false, message: '請選擇 7-11 取件門市' },
         { status: 400 }
       );
     }
