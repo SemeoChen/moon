@@ -104,12 +104,12 @@ export default function Home() {
                   <div className="text-[11px] text-amber-700">精緻典藏包裝</div>
                 </div>
                 <div className="bg-gradient-to-b from-amber-50 to-amber-100/80 p-3.5 rounded-2xl border-2 border-amber-400 shadow-sm text-center">
-                  <div className="text-xs font-bold text-amber-800">1~4 盒早鳥 9 折</div>
+                  <div className="text-xs font-bold text-amber-800">1~4 盒 9 折</div>
                   <div className="text-xl font-black text-amber-700 font-serif">NT$ 622</div>
                   <div className="text-[11px] text-amber-800">特惠 $622 / 盒</div>
                 </div>
                 <div className="col-span-2 sm:col-span-1 bg-gradient-to-b from-amber-600 to-amber-800 text-white p-3.5 rounded-2xl shadow-md text-center">
-                  <div className="text-xs font-bold text-amber-200">5~8 盒早鳥 85 折</div>
+                  <div className="text-xs font-bold text-amber-200">5~8 盒 85 折</div>
                   <div className="text-xl font-black font-serif text-white">NT$ 588</div>
                   <div className="text-[11px] text-amber-200">特惠 $588 / 盒</div>
                 </div>
@@ -128,7 +128,7 @@ export default function Home() {
                   className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white font-serif font-bold text-base rounded-2xl shadow-xl hover:shadow-glow transition duration-200 flex items-center justify-center space-x-2 border border-amber-300/30 cursor-pointer"
                 >
                   <Gift className="w-5 h-5 text-amber-300" />
-                  <span>立即預訂享早鳥價</span>
+                  <span>立即預訂禮盒</span>
                 </button>
                 
                 <a
@@ -281,8 +281,8 @@ export default function Home() {
                 a: '聯名禮盒包含三款嚴選頂級手作糕點：1. 法式杏仁瓦片（薄脆金黃、堅果濃香）、2. 芒果恰克（官田在地75%黑巧克力與芒果乾）、3. 蜂蜜燕麥餅乾（天然蜂蜜、燕麥與蔓越莓）。'
               },
               {
-                q: '請問早鳥優惠折扣與免運門檻如何計算？',
-                a: '聯名禮盒原價 $692/盒。預訂 1~4 盒享早鳥 9 折 ($622/盒)；5~8 盒享早鳥 85 折 ($588/盒)。全台 7-11 冷凍運費 $129，單筆訂單滿 $5,000 即享全台免運！'
+                q: '請問優惠折扣與免運門檻如何計算？',
+                a: '聯名禮盒原價 $692/盒。預訂 1~4 盒享 9 折 ($622/盒)；5~8 盒享 85 折 ($588/盒)。全台 7-11 冷凍運費 $129，單筆訂單滿 $5,000 即享全台免運！'
               },
               {
                 q: '配送與出貨日程為何？',
@@ -319,7 +319,7 @@ export default function Home() {
       {/* 手機版底部固定預訂按鈕 (Mobile Sticky Floating CTA Bar) */}
       <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-white/95 backdrop-blur-md border-t border-amber-300 p-3 shadow-2xl flex items-center justify-between">
         <div className="text-left pl-2">
-          <div className="text-[11px] text-stone-500">早鳥特惠價 (滿$5000免運)</div>
+          <div className="text-[11px] text-stone-500">限定特惠價 (滿$5000免運)</div>
           <div className="text-base font-bold text-amber-700 font-serif">
             NT$ 622 <span className="text-xs font-normal text-stone-600">/ 盒起</span>
           </div>
@@ -334,31 +334,11 @@ export default function Home() {
       </div>
 
       {/* 頁尾 Footer */}
-      <footer className="mt-auto bg-amber-950 text-amber-100 py-10 pb-24 md:pb-10 border-t-4 border-amber-600">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between text-center md:text-left space-y-6 md:space-y-0">
-          <div className="flex items-center justify-center md:justify-start space-x-3">
-            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-amber-400 shrink-0 bg-amber-100">
-              <Image
-                src="/images/LOGO.png"
-                alt="妮邦廚房 Ｘ 歐伯芒果"
-                fill
-                className="object-contain p-0.5"
-              />
-            </div>
-            <div>
-              <div className="text-lg font-serif font-bold text-white">
-                妮邦廚房 Ｘ 歐伯芒果 中秋聯名禮盒
-              </div>
-              <p className="text-xs text-amber-300/80 mt-0.5">
-                這一次就把今年最真摯的心意，好好裝進一盒手作甜點裡。
-              </p>
-            </div>
-          </div>
-
-          <div className="text-xs text-amber-200/90 space-y-1">
-            <div>預訂與客服專線：<a href="tel:0989518831" className="font-bold underline text-amber-300">0989518831</a></div>
-            <div>配送方式：全台 7-11 店到店冷凍配送 (滿 $5,000 免運)</div>
-          </div>
+      <footer className="mt-auto bg-amber-950 text-amber-100 py-8 pb-24 md:pb-8 border-t-4 border-amber-600">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center text-sm font-semibold text-amber-200 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-4">
+          <span>妮邦廚房 Ｘ 歐伯芒果</span>
+          <span className="hidden sm:inline text-amber-400/80">｜</span>
+          <span>客服專線：<a href="tel:0989518831" className="font-bold underline text-amber-300 hover:text-amber-100">0989518831</a></span>
         </div>
       </footer>
     </main>

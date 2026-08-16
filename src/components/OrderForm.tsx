@@ -138,10 +138,10 @@ export const OrderForm: React.FC = () => {
 
     if (quantity >= 1 && quantity <= 4) {
       unitPrice = DISCOUNT_1_4;
-      discountText = '早鳥優惠 9 折';
+      discountText = '優惠 9 折';
     } else if (quantity >= 5 && quantity <= 8) {
       unitPrice = DISCOUNT_5_8;
-      discountText = '早鳥優惠 85 折';
+      discountText = '優惠 85 折';
     } else if (quantity > 8) {
       unitPrice = DISCOUNT_5_8;
       discountText = '大量訂購專屬價';
@@ -315,21 +315,21 @@ export const OrderForm: React.FC = () => {
 
         {/* 1. 盒數選擇與金額計算卡片 */}
         <div className="bg-amber-50/70 p-5 sm:p-6 rounded-2xl border border-amber-200 space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-base font-bold text-amber-950 flex items-center space-x-2">
-              <span>預訂盒數</span>
-              <span className="text-xs bg-amber-600 text-white px-2 py-0.5 rounded-full font-sans font-normal">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-base sm:text-lg font-bold text-amber-950">預訂盒數</span>
+              <span className="text-xs bg-amber-600 text-white px-2.5 py-0.5 rounded-full font-sans font-medium shrink-0">
                 {pricingInfo.discountText}
               </span>
-            </label>
-            <div className="text-right">
-              <span className="text-xs text-stone-500 line-through mr-2">
-                NT$ {ORIGINAL_PRICE} / 盒
+            </div>
+            <div className="flex items-baseline space-x-1.5 self-start sm:self-auto">
+              <span className="text-xs text-stone-500 line-through">
+                NT$ {ORIGINAL_PRICE}
               </span>
-              <span className="text-xl font-bold text-amber-700 font-serif">
+              <span className="text-lg sm:text-xl font-bold text-amber-700 font-serif">
                 NT$ {pricingInfo.unitPrice}
               </span>
-              <span className="text-xs text-amber-800"> / 盒</span>
+              <span className="text-xs text-amber-800 font-medium">/ 盒</span>
             </div>
           </div>
 
