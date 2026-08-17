@@ -11,17 +11,17 @@ const IMAGES = [
     desc: '結合甜點師細緻手藝與官田在地芒果巧克力，呈現十足誠意的中秋限定禮盒。'
   },
   {
-    src: '/images/DSC03329.JPG',
+    src: '/images/DSC03335.JPG',
     title: '芒果恰克 (Mango Dark Chocolate)',
     desc: '台灣在地小農 75% 濃醇黑巧克力 Ｘ 厚實微酸 Q 彈芒果乾，成熟優雅的大人系風味。'
   },
   {
-    src: '/images/DSC03330.JPG',
+    src: '/images/DSC03329.JPG',
     title: '法式杏仁瓦片 (French Almond Tuiles)',
     desc: '法國發酵奶油與台灣麵粉烘焙，鋪滿滿滿杏仁片，金黃薄脆、堅果香氣濃郁。'
   },
   {
-    src: '/images/DSC03335.JPG',
+    src: '/images/DSC03330.JPG',
     title: '蜂蜜燕麥餅乾 (Honey Oat Cookies)',
     desc: '純天然蜂蜜、燕麥與蔓越莓果乾，口感扎實散發樸實純粹的天然香氣。'
   },
