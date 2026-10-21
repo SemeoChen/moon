@@ -4,23 +4,27 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const isSelfPickup = body.deliveryMethod === 'self_pickup' || body.storeCode === '自取' || body.storeName === '現場自取';
-
-    // 檢查基礎必填欄位 (取件人姓名、取件人手機)
+    // 檢查基礎必填欄位 (收件人姓名、收件人手機、取件門市代碼與名稱)
     if (!body.recipientName || !body.recipientPhone) {
       return NextResponse.json(
-        { success: false, message: '請填寫完整的取件人姓名與手機' },
+        { success: false, message: '請填寫完整的收件人姓名與手機' },
         { status: 400 }
       );
     }
 
-    // 若非現場自取，需驗證 7-11 門市資訊
-    if (!isSelfPickup && (!body.storeCode || !body.storeName)) {
+    if (!body.storeCode || !body.storeName) {
       return NextResponse.json(
         { success: false, message: '請選擇 7-11 取件門市' },
         { status: 400 }
       );
     }
+
+    // 確保溫層固定為 '冷凍'，商品預設為 '芒果恰克'
+    const payload = {
+      ...body,
+      tempZone: '冷凍',
+      productName: body.productName || '芒果恰克',
+    };
 
     // 檢查是否有配置 Google Apps Script Webhook URL
     const gasWebhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
@@ -30,7 +34,7 @@ export async function POST(request: Request) {
         await fetch(gasWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify(payload),
         });
       } catch (webhookErr) {
         console.error('Forwarding to Google Sheet Webhook failed:', webhookErr);
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: '訂單建立成功！',
+      message: '完成訂單！訂單已成功寫入系統。',
       orderId: body.orderId || `NB${Date.now()}`,
     });
   } catch (error) {

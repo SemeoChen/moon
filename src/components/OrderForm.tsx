@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Captcha } from './Captcha';
 import { OrderFormData } from '../types/order';
+import { ProductItem, calculateShippingFee } from '../data/products';
 import sevenElevenStoresData from '@/data/sevenElevenStores.json';
 import {
   ShoppingBag,
@@ -10,22 +11,17 @@ import {
   CheckCircle2,
   Calendar,
   UserCheck,
-  PhoneCall,
   AlertCircle,
   Loader2,
   Sparkles,
   ExternalLink,
   Store,
-  FileText,
   MapPin,
-  Building2
+  Snowflake,
+  Mail,
+  FileSpreadsheet,
+  Gift,
 } from 'lucide-react';
-
-const ORIGINAL_PRICE = 692; // 原價
-const DISCOUNT_1_4 = 622;   // 1~4 盒 9 折
-const DISCOUNT_5_8 = 588;   // 5~8 盒 85 折
-const SHIPPING_FEE = 129;   // 7-11 冷凍配送運費
-const FREE_SHIPPING_THRESHOLD = 5000; // 滿 $5,000 免運費
 
 interface StoreItem {
   id: string;
@@ -37,18 +33,20 @@ interface StoreItem {
 type StoreDataset = Record<string, Record<string, StoreItem[]>>;
 const STORES_DB = sevenElevenStoresData as StoreDataset;
 
-export const OrderForm: React.FC = () => {
-  // 配送方式：'7-11' (店到店) 或 'self_pickup' (現場自取)
-  const [deliveryMethod, setDeliveryMethod] = useState<'7-11' | 'self_pickup'>('7-11');
+interface OrderFormProps {
+  selectedProduct: ProductItem;
+  onSelectProductById?: (productId: string) => void;
+}
 
+export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
   // 盒數與訂購細節
-  const [quantity, setQuantity] = useState<number>(1);
+  const [quantity, setQuantity] = useState<number>(4);
 
-  // 取件人資訊
+  // 收件人資訊
   const [recipientName, setRecipientName] = useState<string>('');
   const [recipientPhone, setRecipientPhone] = useState<string>('');
 
-  // 7-11 門市三級選單 (縣市, 行政區, 門市)
+  // 7-11 門市三級選單 (縣市, 行政區, 店名)
   const cityList = useMemo(() => Object.keys(STORES_DB), []);
   const [selectedCity, setSelectedCity] = useState<string>('臺北市');
 
@@ -69,33 +67,45 @@ export const OrderForm: React.FC = () => {
   const [storeName, setStoreName] = useState<string>('');
   const [storeAddress, setStoreAddress] = useState<string>('');
 
-  // 配送與備註
+  // 買家下訂日期 (預設今天 YYYY/MM/DD)
+  const [orderDate, setOrderDate] = useState<string>('');
+  useEffect(() => {
+    const now = new Date();
+    const formatted = `${now.getFullYear()}/${(now.getMonth() + 1)
+      .toString()
+      .padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
+    setOrderDate(formatted);
+  }, []);
+
+  // 希望送達日期、寄件人/買家 EMAIL、商品備註
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [needReceipt, setNeedReceipt] = useState<boolean>(false);
-  const [receiptTitle, setReceiptTitle] = useState<string>('');
 
   // 圖形驗證碼
   const [correctCaptcha, setCorrectCaptcha] = useState<string>('');
   const [captchaInput, setCaptchaInput] = useState<string>('');
 
-  // 提交狀態與彈窗
+  // 提交狀態與完成訂單彈窗
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<{
     orderId: string;
+    productName: string;
+    tempZone: string;
     totalAmount: number;
     orderAmount: number;
     shippingFee: number;
     quantity: number;
-    deliveryMethod: '7-11' | 'self_pickup';
     recipientName: string;
     recipientPhone: string;
     storeCode: string;
     storeName: string;
     storeAddress: string;
+    orderDate: string;
     expectedDeliveryDate: string;
+    email: string;
+    compiledItemNotes: string;
   } | null>(null);
 
   // 當縣市變更時，自動更新行政區
@@ -108,144 +118,129 @@ export const OrderForm: React.FC = () => {
     }
   };
 
-  // 當行政區或縣市變更時，自動預設第一間門市
+  // 當行政區或縣市變更時，自動預設第一間門市並填入取件門市(代碼)與取件門市欄位
   useEffect(() => {
-    if (deliveryMethod === '7-11') {
-      if (storeOptions && storeOptions.length > 0) {
-        const firstStore = storeOptions[0];
-        setSelectedStoreId(firstStore.id);
-        setStoreCode(firstStore.id);
-        setStoreName(firstStore.name);
-        setStoreAddress(firstStore.address);
-      } else {
-        setSelectedStoreId('');
-        setStoreCode('');
-        setStoreName('');
-        setStoreAddress('');
-      }
+    if (storeOptions && storeOptions.length > 0) {
+      const firstStore = storeOptions[0];
+      setSelectedStoreId(firstStore.id);
+      setStoreCode(firstStore.id);
+      setStoreName(`7-11 ${firstStore.name}門市`);
+      setStoreAddress(firstStore.address);
+    } else {
+      setSelectedStoreId('');
+      setStoreCode('');
+      setStoreName('');
+      setStoreAddress('');
     }
-  }, [storeOptions, deliveryMethod]);
+  }, [storeOptions]);
 
-  // 當選擇門市選單改變時，自動寫入代碼與店名
+  // 當選擇門市選單改變時，自動填入取件門市(代碼)以及取件門市欄位
   const handleStoreSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const targetId = e.target.value;
     setSelectedStoreId(targetId);
     const found = storeOptions.find((s) => s.id === targetId);
     if (found) {
       setStoreCode(found.id);
-      setStoreName(found.name);
+      setStoreName(`7-11 ${found.name}門市`);
       setStoreAddress(found.address);
     }
   };
 
-  // 自動計算單價、商品金額、運費與最終總額
+  const unitPrice = selectedProduct.price || 250;
+  const originalPrice = selectedProduct.originalPrice || 280;
+
+  // 自動計算訂單金額、階梯運費與應付總額
   const pricingInfo = useMemo(() => {
-    let unitPrice = ORIGINAL_PRICE;
-    let discountText = '原價';
-
-    if (quantity >= 1 && quantity <= 4) {
-      unitPrice = DISCOUNT_1_4;
-      discountText = '優惠 9 折';
-    } else if (quantity >= 5 && quantity <= 8) {
-      unitPrice = DISCOUNT_5_8;
-      discountText = '優惠 85 折';
-    } else if (quantity > 8) {
-      unitPrice = DISCOUNT_5_8;
-      discountText = '大量訂購專屬價';
-    }
-
-    const orderAmount = quantity * unitPrice; // 商品小計
-    const isSelfPickup = deliveryMethod === 'self_pickup';
-    const isFreeShipping = isSelfPickup || orderAmount >= FREE_SHIPPING_THRESHOLD;
-    const shippingFee = isSelfPickup ? 0 : (isFreeShipping ? 0 : SHIPPING_FEE); // 現場自取為 0
-    const totalAmount = orderAmount + shippingFee; // 總金額
-    const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - orderAmount);
+    const orderAmount = quantity * unitPrice;
+    const { shippingFee, currentTierLabel, nextTierInfo } = calculateShippingFee(
+      orderAmount,
+      quantity
+    );
+    const totalAmount = orderAmount + shippingFee;
 
     return {
       unitPrice,
+      originalPrice,
       orderAmount,
       shippingFee,
       totalAmount,
-      discountText,
-      isSelfPickup,
-      isFreeShipping,
-      remainingForFreeShipping
+      currentTierLabel,
+      nextTierInfo,
     };
-  }, [quantity, deliveryMethod]);
+  }, [quantity, unitPrice, originalPrice]);
+
+  // 即時產生將寫入 Google Sheet 的備註內容（希望送達門市(中文)、送達日期、訂購盒數）
+  const compiledItemNotesPreview = useMemo(() => {
+    const deliveryDateText = expectedDeliveryDate || '依序出貨';
+    const baseNote = `希望送達門市：${storeName || '未選擇'}(${
+      storeCode || '-'
+    })｜希望送達日期：${deliveryDateText}｜訂購盒數：${quantity}${selectedProduct.unit || '盒'}`;
+    return notes.trim() ? `${baseNote}｜買家備註：${notes.trim()}` : baseNote;
+  }, [storeName, storeCode, expectedDeliveryDate, quantity, selectedProduct.unit, notes]);
 
   // 檢查並送出表單
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    // 1. 取件人姓名驗證 (不可超過5個中文字)
+    if (selectedProduct.status !== 'available') {
+      setErrorMessage(`「${selectedProduct.name}」目前為「${selectedProduct.statusBadgeText}」，請切換至主打商品「芒果恰克」進行訂購。`);
+      return;
+    }
+
+    // 1. 收件人姓名驗證
     if (!recipientName.trim()) {
-      setErrorMessage('請填寫取件人姓名');
+      setErrorMessage('請填寫收件人姓名');
       return;
     }
-
     if (recipientName.trim().length > 10) {
-      setErrorMessage('取件人姓名請勿超過 5 個中文字 (10 碼)');
+      setErrorMessage('收件人姓名請勿超過 10 個字元');
       return;
     }
 
-    // 2. 取件人手機驗證 (10碼數字)
+    // 2. 收件人手機驗證 (10碼數字)
     const cleanPhone = recipientPhone.replace(/-/g, '').trim();
     if (!cleanPhone || !/^09\d{8}$/.test(cleanPhone)) {
       setErrorMessage('請填寫正確的 10 位數手機號碼 (例如: 0912345678)');
       return;
     }
 
-    // 3. 配送與門市驗證 (若選擇 7-11 才需驗證門市)
-    const isSelfPickup = deliveryMethod === 'self_pickup';
-    const cleanStoreCode = isSelfPickup ? '自取' : storeCode.trim();
-    const finalStoreName = isSelfPickup ? '現場自取' : storeName.trim();
-
-    if (!isSelfPickup) {
-      if (!cleanStoreCode) {
-        setErrorMessage('請選擇 7-11 取件門市');
-        return;
-      }
-      if (!finalStoreName) {
-        setErrorMessage('請選擇 7-11 取件門市店名');
-        return;
-      }
+    // 3. 7-11 取件門市驗證
+    const cleanStoreCode = storeCode.trim();
+    const finalStoreName = storeName.trim();
+    if (!cleanStoreCode || !finalStoreName) {
+      setErrorMessage('請選擇 7-11 取件門市（縣市、行政區與店名）');
+      return;
     }
 
-    // 4. 圖形驗證碼比對
-    if (!captchaInput.trim() || captchaInput.trim().toUpperCase() !== correctCaptcha.toUpperCase()) {
-      setErrorMessage('圖形驗證碼輸入錯誤，請重新確認或點擊「換一張」');
+    // 4. 四碼圖形驗證碼比對
+    if (
+      !captchaInput.trim() ||
+      captchaInput.trim().toUpperCase() !== correctCaptcha.toUpperCase()
+    ) {
+      setErrorMessage('四碼圖形驗證碼輸入錯誤，請重新確認或點擊「換一張」');
       return;
     }
 
     setIsSubmitting(true);
 
-    // 自動產生 12 碼訂單編號
+    // 產生訂單編號
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const generatedOrderId = `NB${dateStr}${randomSuffix}`;
 
-    // 格式化當天日期 YYYY/MM/DD
-    const orderDateStr = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
-
-    // 組合商品備註 (門市/自取 + 希望送達日期 + 訂購盒數 + 收據抬頭/客人備註)
-    let compiledItemNotes = isSelfPickup
-      ? `【取件方式: 現場自取】 【希望取貨日期: ${expectedDeliveryDate || '未指定'}】 【訂購盒數: ${quantity}盒】`
-      : `【取件門市: ${finalStoreName} (${cleanStoreCode})】 【送達日期: ${expectedDeliveryDate || '未指定'}】 【訂購盒數: ${quantity}盒】`;
-
-    if (needReceipt && receiptTitle.trim()) {
-      compiledItemNotes += ` 【需免用發票收據 抬頭:${receiptTitle.trim()}】`;
-    }
-    if (notes.trim()) {
-      compiledItemNotes += ` 【備註: ${notes.trim()}】`;
-    }
+    const currentOrderDate =
+      orderDate ||
+      `${now.getFullYear()}/${(now.getMonth() + 1)
+        .toString()
+        .padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
 
     const orderData: OrderFormData = {
-      deliveryMethod,
+      productId: selectedProduct.id,
+      productName: selectedProduct.name,
       quantity,
       unitPrice: pricingInfo.unitPrice,
-      discountRateText: pricingInfo.discountText,
       orderAmount: pricingInfo.orderAmount,
       shippingFee: pricingInfo.shippingFee,
       totalAmount: pricingInfo.totalAmount,
@@ -255,12 +250,11 @@ export const OrderForm: React.FC = () => {
       storeCode: cleanStoreCode,
       storeName: finalStoreName,
 
-      tempZone: isSelfPickup ? '自取' : '冷凍',
-      productName: '中秋聯名禮盒',
-      orderDate: orderDateStr,
-      expectedDeliveryDate: expectedDeliveryDate || (isSelfPickup ? '現場自取' : '預計9/1起陸續出貨'),
+      tempZone: '冷凍',
+      orderDate: currentOrderDate,
+      expectedDeliveryDate: expectedDeliveryDate || '依序出貨',
       notes: notes.trim(),
-      itemNotes: compiledItemNotes,
+      itemNotes: compiledItemNotesPreview,
 
       email: email.trim(),
       captchaInput: captchaInput.trim(),
@@ -278,37 +272,28 @@ export const OrderForm: React.FC = () => {
       if (resData.success || response.ok) {
         setCompletedOrder({
           orderId: generatedOrderId,
+          productName: selectedProduct.name,
+          tempZone: '冷凍',
           totalAmount: pricingInfo.totalAmount,
           orderAmount: pricingInfo.orderAmount,
           shippingFee: pricingInfo.shippingFee,
           quantity,
-          deliveryMethod,
           recipientName: recipientName.trim(),
           recipientPhone: cleanPhone,
           storeCode: cleanStoreCode,
           storeName: finalStoreName,
-          storeAddress: isSelfPickup ? '現場自取 (免填門市)' : storeAddress,
-          expectedDeliveryDate: expectedDeliveryDate || (isSelfPickup ? '現場自取' : '9/1 起順序陸續出貨'),
+          storeAddress,
+          orderDate: currentOrderDate,
+          expectedDeliveryDate: expectedDeliveryDate || '依序安排出貨',
+          email: email.trim(),
+          compiledItemNotes: compiledItemNotesPreview,
         });
       } else {
         setErrorMessage(resData.message || '訂單送出失敗，請稍後再試。');
       }
     } catch (err) {
       console.error(err);
-      setCompletedOrder({
-        orderId: generatedOrderId,
-        totalAmount: pricingInfo.totalAmount,
-        orderAmount: pricingInfo.orderAmount,
-        shippingFee: pricingInfo.shippingFee,
-        quantity,
-        deliveryMethod,
-        recipientName: recipientName.trim(),
-        recipientPhone: cleanPhone,
-        storeCode: cleanStoreCode,
-        storeName: finalStoreName,
-        storeAddress: isSelfPickup ? '現場自取 (免填門市)' : storeAddress,
-        expectedDeliveryDate: expectedDeliveryDate || (isSelfPickup ? '現場自取' : '9/1 起順序陸續出貨'),
-      });
+      setErrorMessage('網路連線異常，請稍後再試。');
     } finally {
       setIsSubmitting(false);
     }
@@ -316,198 +301,242 @@ export const OrderForm: React.FC = () => {
 
   return (
     <div id="order-section" className="w-full max-w-4xl mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-8 bg-white/95 backdrop-blur-sm p-5 sm:p-10 rounded-3xl shadow-card border border-amber-200/80">
-        
-        {/* 表單 Header */}
-        <div className="border-b border-amber-100 pb-6">
-          <div className="flex items-center space-x-3 text-amber-700 font-semibold text-sm mb-1">
-            <ShoppingBag className="w-5 h-5 text-amber-700" />
-            <span>妮邦廚房 Ｘ 歐伯芒果 2026 中秋線上預購系統</span>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-8 bg-white/95 backdrop-blur-sm p-5 sm:p-10 rounded-3xl shadow-card border border-amber-200/90"
+      >
+        {/* 表單頂部標題 */}
+        <div className="border-b border-amber-100 pb-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="flex items-center space-x-2 text-amber-800 font-bold text-sm">
+              <ShoppingBag className="w-5 h-5 text-amber-700" />
+              <span>妮邦廚房 Ｘ 歐伯芒果 產品訂購表單</span>
+            </div>
+            <span className="inline-flex items-center space-x-1.5 text-xs font-bold bg-sky-50 text-sky-800 border border-sky-200 px-3 py-1 rounded-full">
+              <Snowflake className="w-3.5 h-3.5 text-sky-600" />
+              <span>一律以 7-11 冷凍交貨便寄出（溫層固定：冷凍）</span>
+            </span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-950">
-            中秋聯名禮盒線上預訂
+            線上預訂：{selectedProduct.name}
           </h2>
           <p className="text-stone-600 text-xs sm:text-sm mt-1">
-            可選擇 <strong className="text-amber-800">7-11 冷凍配送</strong> 或 <strong className="text-amber-800">現場自取 (免運費)</strong>。單筆滿 $5,000 即享 7-11 冷凍全台免運！
+            請填寫收件人資訊與選擇全台 7-11 取件門市，輸入正確四碼圖形驗證碼後即可送出訂單寫入系統。
           </p>
         </div>
 
-        {/* 取貨/配送方式切換卡片 */}
-        <div className="space-y-3">
-          <label className="block text-xs font-bold text-amber-950 flex items-center space-x-1.5">
-            <Truck className="w-4 h-4 text-amber-700" />
-            <span>請選擇取貨 / 配送方式 <span className="text-red-500">*</span></span>
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* 7-11 店到店冷凍配送 */}
-            <div
-              onClick={() => setDeliveryMethod('7-11')}
-              className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-center space-x-3 ${
-                deliveryMethod === '7-11'
-                  ? 'border-amber-600 bg-amber-50/90 shadow-sm'
-                  : 'border-stone-200 bg-white hover:border-amber-300'
-              }`}
-            >
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                deliveryMethod === '7-11' ? 'border-amber-700 bg-amber-700' : 'border-stone-300'
-              }`}>
-                {deliveryMethod === '7-11' && <div className="w-2 h-2 rounded-full bg-white" />}
-              </div>
-              <div>
-                <div className="font-bold text-sm text-amber-950 flex items-center space-x-1.5">
-                  <Truck className="w-4 h-4 text-amber-700" />
-                  <span>7-11 冷凍店到店配送</span>
-                </div>
-                <div className="text-xs text-stone-500 mt-0.5">
-                  運費 NT$ 129（單筆滿 $5,000 免運）
-                </div>
+        {/* 1. 商品、溫層、訂購盒數與階梯運費試算 */}
+        <div className="bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-amber-50/80 p-5 sm:p-6 rounded-2xl border border-amber-200 space-y-5">
+          {/* 商品名稱與溫層唯讀欄位列 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200/80">
+              <label className="block text-[11px] font-bold text-stone-500 mb-0.5">
+                訂購商品 (自動帶入)
+              </label>
+              <div className="text-base font-serif font-bold text-amber-950 flex items-center justify-between">
+                <span>{selectedProduct.name}</span>
+                <span className="text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-sans">
+                  ${unitPrice}/{selectedProduct.unit}
+                </span>
               </div>
             </div>
 
-            {/* 現場自取 */}
-            <div
-              onClick={() => setDeliveryMethod('self_pickup')}
-              className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-center space-x-3 ${
-                deliveryMethod === 'self_pickup'
-                  ? 'border-amber-600 bg-amber-50/90 shadow-sm'
-                  : 'border-stone-200 bg-white hover:border-amber-300'
-              }`}
-            >
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                deliveryMethod === 'self_pickup' ? 'border-amber-700 bg-amber-700' : 'border-stone-300'
-              }`}>
-                {deliveryMethod === 'self_pickup' && <div className="w-2 h-2 rounded-full bg-white" />}
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200/80">
+              <label className="block text-[11px] font-bold text-stone-500 mb-0.5">
+                配送溫層 (固定)
+              </label>
+              <div className="text-base font-bold text-sky-800 flex items-center space-x-1.5">
+                <Snowflake className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>冷凍 (7-11 冷凍交貨便)</span>
               </div>
-              <div>
-                <div className="font-bold text-sm text-amber-950 flex items-center space-x-1.5">
-                  <Building2 className="w-4 h-4 text-amber-700" />
-                  <span>現場自取</span>
-                  <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">
-                    免運費 $0
-                  </span>
-                </div>
-                <div className="text-xs text-stone-500 mt-0.5">
-                  免輸入 7-11 店名，親自取貨
-                </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200/80">
+              <label className="block text-[11px] font-bold text-stone-500 mb-0.5">
+                買家下訂日期
+              </label>
+              <div className="text-base font-mono font-bold text-stone-800">
+                {orderDate || '今日'}
               </div>
             </div>
           </div>
-        </div>
 
-        {/* 1. 盒數選擇與金額計算卡片 */}
-        <div className="bg-amber-50/70 p-5 sm:p-6 rounded-2xl border border-amber-200 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-base sm:text-lg font-bold text-amber-950">預訂盒數</span>
-              <span className="text-xs bg-amber-600 text-white px-2.5 py-0.5 rounded-full font-sans font-medium shrink-0">
-                {pricingInfo.discountText}
-              </span>
-            </div>
-            <div className="flex items-baseline space-x-1.5 self-start sm:self-auto">
-              <span className="text-xs text-stone-500 line-through">
-                NT$ {ORIGINAL_PRICE}
-              </span>
-              <span className="text-lg sm:text-xl font-bold text-amber-700 font-serif">
-                NT$ {pricingInfo.unitPrice}
-              </span>
-              <span className="text-xs text-amber-800 font-medium">/ 盒</span>
-            </div>
-          </div>
-
-          {/* 盒數選擇器 */}
-          <div className="flex items-center space-x-4">
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              className="w-11 h-11 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xl flex items-center justify-center transition shadow-sm cursor-pointer"
-            >
-              -
-            </button>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-24 text-center py-2 text-xl font-bold font-serif text-amber-950 bg-white border-2 border-amber-400 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => q + 1)}
-              className="w-11 h-11 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xl flex items-center justify-center transition shadow-sm cursor-pointer"
-            >
-              +
-            </button>
-          </div>
-
-          {/* 運費與免運提醒條 */}
-          <div className="p-3.5 rounded-xl bg-white border border-amber-200 text-xs sm:text-sm">
-            {deliveryMethod === 'self_pickup' ? (
-              <div className="flex items-center space-x-2 text-emerald-700 font-bold">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>您已選擇「現場自取」，免運費 ($0)！</span>
+          {/* 單價與盒數選擇器 */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-amber-200/60">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-base sm:text-lg font-bold text-amber-950">
+                  選擇訂購盒數
+                </span>
+                <span className="text-xs bg-red-600 text-white px-2.5 py-0.5 rounded-full font-bold">
+                  限時特惠價
+                </span>
               </div>
-            ) : pricingInfo.isFreeShipping ? (
-              <div className="flex items-center space-x-2 text-emerald-700 font-bold">
-                <Sparkles className="w-4 h-4 text-emerald-600 animate-bounce" />
-                <span>已滿 NT$ 5,000 門檻！恭喜享有全台 7-11 冷凍免運優惠！</span>
+              <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-xs text-stone-500 line-through">
+                  原價 ${originalPrice}/{selectedProduct.unit}
+                </span>
+                <span className="text-xl font-extrabold text-amber-800 font-serif">
+                  特價 NT$ {unitPrice}
+                </span>
+                <span className="text-xs text-stone-600">/ {selectedProduct.unit}</span>
+              </div>
+            </div>
+
+            {/* 盒數加減與快捷按鈕 */}
+            <div className="flex flex-col items-start sm:items-end space-y-2">
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="w-11 h-11 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xl flex items-center justify-center transition shadow-sm cursor-pointer"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={quantity}
+                  onChange={(e) =>
+                    setQuantity(Math.max(1, parseInt(e.target.value) || 1))
+                  }
+                  className="w-24 text-center py-2 text-xl font-bold font-serif text-amber-950 bg-white border-2 border-amber-500 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="w-11 h-11 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xl flex items-center justify-center transition shadow-sm cursor-pointer"
+                >
+                  +
+                </button>
+                <span className="text-sm font-bold text-amber-950">
+                  {selectedProduct.unit}
+                </span>
+              </div>
+
+              {/* 揪團湊單快捷鍵 */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { boxes: 1, tag: '1盒嚐鮮' },
+                  { boxes: 4, tag: '4盒(滿千運$100)' },
+                  { boxes: 8, tag: '8盒(滿兩千運$80)' },
+                  { boxes: 12, tag: '12盒(滿三千免運🔥)' },
+                ].map((preset) => (
+                  <button
+                    key={preset.boxes}
+                    type="button"
+                    onClick={() => setQuantity(preset.boxes)}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                      quantity === preset.boxes
+                        ? 'bg-amber-800 text-white shadow-sm'
+                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    {preset.tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 🎁 揪團湊單階梯運費進度表 */}
+          <div className="bg-white p-4 rounded-xl border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-950 flex items-center space-x-1.5">
+                <Gift className="w-4 h-4 text-red-600" />
+                <span>🎁 揪團湊單更划算（7-11 冷凍交貨便階梯運費）</span>
+              </span>
+              <span className="text-xs font-bold text-emerald-700">
+                目前適用：{pricingInfo.currentTierLabel}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+              {[
+                { label: '未滿千元 (1~3盒)', feeText: '運費 $120', active: pricingInfo.shippingFee === 120 },
+                { label: '滿 $1,000 (4盒)', feeText: '運費 $100', active: pricingInfo.shippingFee === 100 },
+                { label: '滿 $2,000 (8盒)', feeText: '運費 $80', active: pricingInfo.shippingFee === 80 },
+                { label: '滿 $3,000 (12盒)', feeText: '免運費 $0', active: pricingInfo.shippingFee === 0 },
+              ].map((tier, idx) => (
+                <div
+                  key={idx}
+                  className={`p-2.5 rounded-xl border transition ${
+                    tier.active
+                      ? 'bg-amber-100/90 border-amber-500 text-amber-950 font-bold ring-2 ring-amber-400/40'
+                      : 'bg-stone-50 border-stone-200 text-stone-500'
+                  }`}
+                >
+                  <div className="text-[11px]">{tier.label}</div>
+                  <div className={`text-sm mt-0.5 ${tier.active ? 'text-red-700 font-extrabold' : ''}`}>
+                    {tier.feeText}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {pricingInfo.nextTierInfo ? (
+              <div className="text-xs text-amber-800 bg-amber-50 px-3 py-2 rounded-lg flex items-center justify-between">
+                <span>
+                  💡 再加購{' '}
+                  <strong className="text-red-600 underline">
+                    {pricingInfo.nextTierInfo.neededBoxes} 盒
+                  </strong>{' '}
+                  (差 NT$ {pricingInfo.nextTierInfo.neededAmount.toLocaleString()})，
+                  {pricingInfo.nextTierInfo.nextFee === 0
+                    ? '立即享有「免運費 ($0)」！'
+                    : `運費立即降為 $${pricingInfo.nextTierInfo.nextFee}！`}
+                </span>
               </div>
             ) : (
-              <div className="flex items-center justify-between text-stone-700">
-                <div className="flex items-center space-x-1">
-                  <Truck className="w-4 h-4 text-amber-700 shrink-0" />
-                  <span>7-11 店到店冷凍運費：<strong className="text-amber-800">NT$ 129</strong></span>
-                </div>
-                <div className="text-amber-800 font-medium text-xs">
-                  再加購 <strong className="font-bold underline text-amber-900">NT$ {pricingInfo.remainingForFreeShipping.toLocaleString()}</strong> 享免運！
-                </div>
+              <div className="text-xs text-emerald-800 bg-emerald-50 px-3 py-2 rounded-lg font-bold flex items-center space-x-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>恭喜已達滿 $3,000（12盒）最高門檻，本單享「免運費 $0」！</span>
               </div>
             )}
           </div>
 
-          {/* 大量訂購提醒 */}
-          {quantity > 8 && (
-            <div className="flex items-start space-x-2 p-3 bg-amber-100/90 border border-amber-300 rounded-xl text-amber-900 text-xs sm:text-sm">
-              <PhoneCall className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-              <div>
-                <strong>大量企業訂購特別提醒：</strong> 您選擇了 {quantity} 盒禮盒。8 盒以上享極尊榮企業特惠價，歡迎撥打專線{' '}
-                <a href="tel:0989518831" className="underline font-bold text-amber-800 hover:text-amber-600">
-                  0989518831
-                </a>{' '}
-                由專人為您安排！
+          {/* 訂單金額 + 運費金額 = 總金額 欄位顯示 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-950 text-amber-50 p-4 rounded-xl shadow-inner">
+            <div>
+              <div className="text-[11px] text-amber-300/80">訂單金額 (商品小計)</div>
+              <div className="text-lg font-bold font-mono">
+                NT$ {pricingInfo.orderAmount.toLocaleString()}
+                <span className="text-xs font-normal text-amber-200/80 ml-1">
+                  ({quantity}盒 × ${unitPrice})
+                </span>
               </div>
             </div>
-          )}
-
-          {/* 應付金額試算卡片 */}
-          <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-amber-200 mt-4 shadow-sm">
-            <div className="text-xs sm:text-sm text-stone-700 space-y-1 mb-2 sm:mb-0 w-full sm:w-auto">
-              <div>取貨方式：<span className="font-semibold text-amber-900">{deliveryMethod === 'self_pickup' ? '現場自取 (免運)' : '7-11 店到店 (冷凍)'}</span></div>
-              <div className="text-stone-500">
-                商品小計：NT$ {pricingInfo.orderAmount.toLocaleString()} ＋ 運費：{pricingInfo.shippingFee === 0 ? <span className="text-emerald-600 font-bold">免運 ($0)</span> : `NT$ ${SHIPPING_FEE}`}
+            <div>
+              <div className="text-[11px] text-amber-300/80">運費金額 (7-11冷凍交貨便)</div>
+              <div className="text-lg font-bold font-mono">
+                {pricingInfo.shippingFee === 0 ? (
+                  <span className="text-emerald-300">NT$ 0 (滿三千免運)</span>
+                ) : (
+                  `NT$ ${pricingInfo.shippingFee}`
+                )}
               </div>
             </div>
-            <div className="text-right w-full sm:w-auto">
-              <div className="text-xs text-stone-500">應付總金額</div>
-              <div className="text-2xl font-extrabold text-amber-700 font-serif">
+            <div className="sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-800">
+              <div className="text-[11px] text-amber-300">應付總金額 (訂單+運費)</div>
+              <div className="text-2xl font-extrabold text-amber-300 font-serif">
                 NT$ {pricingInfo.totalAmount.toLocaleString()}
               </div>
             </div>
           </div>
         </div>
 
-        {/* 2. 取件人資訊與門市/自取欄位 */}
+        {/* 2. 收件人姓名、收件人手機與全國 7-11 取件門市選單 */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-amber-950 flex items-center space-x-2 border-b border-amber-100 pb-2">
             <UserCheck className="w-5 h-5 text-amber-700" />
-            <span>1. 取件人資訊與取貨地點</span>
+            <span>1. 收件人資訊與 7-11 取件門市</span>
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                取件人姓名 <span className="text-red-500">* (上限 5 個中文字)</span>
+                收件人姓名 <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -515,14 +544,14 @@ export const OrderForm: React.FC = () => {
                 maxLength={10}
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
-                placeholder="例如：王小明"
-                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
+                placeholder="請輸入取件人真實姓名 (如：王小明)"
+                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/70 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                取件人手機 <span className="text-red-500">* (10碼數字，請勿含「-」)</span>
+                收件人手機 <span className="text-red-500">* (10碼數字，如 0912345678)</span>
               </label>
               <input
                 type="tel"
@@ -531,123 +560,131 @@ export const OrderForm: React.FC = () => {
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
                 placeholder="例如：0912345678"
-                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
+                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/70 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
               />
             </div>
           </div>
 
-          {/* 門市選擇器 (7-11) 或 自取說明 */}
-          {deliveryMethod === 'self_pickup' ? (
-            <div className="p-4 bg-emerald-50/80 border-2 border-emerald-300 rounded-2xl text-xs sm:text-sm text-emerald-900 flex items-center space-x-3">
-              <Building2 className="w-6 h-6 text-emerald-700 shrink-0" />
-              <div>
-                <strong className="text-base block">已選擇「現場自取」選項</strong>
-                您不需輸入 7-11 門市名稱與店號，現場取貨享 <span className="font-bold underline">免運費 NT$ 0</span>！
-              </div>
+          {/* 台灣 7-11 全國門市選擇器 */}
+          <div className="space-y-3.5 pt-2 bg-amber-50/60 p-4 sm:p-5 rounded-2xl border border-amber-200">
+            <div className="flex flex-wrap justify-between items-center gap-2">
+              <label className="text-xs sm:text-sm font-bold text-amber-950 flex items-center space-x-1.5">
+                <Store className="w-4 h-4 text-amber-700" />
+                <span>選擇台灣 7-11 取件門市（選取縣市、行政區、店名後自動填入代碼與門市欄位）</span>
+              </label>
+              <a
+                href="https://emap.pcsc.com.tw/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-amber-800 hover:text-amber-950 font-bold underline flex items-center space-x-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>7-11 電子地圖查詢</span>
+              </a>
             </div>
-          ) : (
-            <div className="space-y-3 pt-2 bg-amber-50/50 p-4 rounded-2xl border border-amber-200">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-amber-950 flex items-center space-x-1.5">
-                  <Store className="w-4 h-4 text-amber-700" />
-                  <span>7-11 全國門市對照選單</span>
-                  <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-normal">
-                    自動填入門市代碼與名稱
-                  </span>
-                </label>
-                <a
-                  href="https://emap.pcsc.com.tw/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] text-amber-800 hover:text-amber-950 font-bold underline flex items-center space-x-1"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  <span>外部電子地圖查詢</span>
-                </a>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-stone-600 mb-1">1. 選擇縣市</label>
-                  <select
-                    value={selectedCity}
-                    onChange={handleCityChange}
-                    className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
-                  >
-                    {cityList.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-stone-600 mb-1">2. 選擇鄉鎮市區</label>
-                  <select
-                    value={selectedDistrict}
-                    onChange={(e) => setSelectedDistrict(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
-                  >
-                    {districtList.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
+            {/* 三級選單：縣市 -> 行政區 -> 店名 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-stone-600 mb-1">
-                  3. 選擇 7-11 門市 ({storeOptions.length} 家門市供選擇)
+                <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                  步驟 1：選取縣市
                 </label>
                 <select
-                  value={selectedStoreId}
-                  onChange={handleStoreSelectChange}
-                  className="w-full px-3.5 py-2.5 bg-white border-2 border-amber-400 rounded-xl text-base sm:text-sm font-bold text-amber-950 focus:ring-2 focus:ring-amber-500"
+                  value={selectedCity}
+                  onChange={handleCityChange}
+                  className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
                 >
-                  {storeOptions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (店號: {s.id}) - {s.address}
+                  {cityList.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* 即時已選門市卡片顯示 */}
-              {storeCode && (
-                <div className="p-3 bg-white rounded-xl border border-amber-300 space-y-1 text-xs text-stone-700 shadow-sm mt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-900 text-sm flex items-center space-x-1">
-                      <MapPin className="w-4 h-4 text-amber-700" />
-                      <span>已選取門市：{storeName}</span>
-                    </span>
-                    <span className="font-mono bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold">
-                      門市店號代碼：{storeCode}
-                    </span>
-                  </div>
-                  {storeAddress && (
-                    <div className="text-stone-500 pl-5">門市地址：{storeAddress}</div>
-                  )}
-                </div>
-              )}
+              <div>
+                <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                  步驟 2：選取行政區
+                </label>
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => setSelectedDistrict(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                >
+                  {districtList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                  步驟 3：選取 7-11 店名 ({storeOptions.length} 家門市)
+                </label>
+                <select
+                  value={selectedStoreId}
+                  onChange={handleStoreSelectChange}
+                  className="w-full px-3.5 py-2.5 bg-white border-2 border-amber-500 rounded-xl text-base sm:text-sm font-bold text-amber-950 focus:ring-2 focus:ring-amber-500"
+                >
+                  {storeOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}門市 (代碼:{s.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
+
+            {/* 自動填入之「取件門市(代碼)」與「取件門市(中文)」欄位 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                  取件門市 (代碼) <span className="text-stone-500 font-normal">(自動填入 6 碼店號)</span>
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={storeCode}
+                  className="w-full px-3.5 py-2 bg-amber-100/70 border border-amber-300 rounded-xl text-sm font-mono font-bold text-amber-950 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                  取件門市 (中文店名) <span className="text-stone-500 font-normal">(自動填入並寫入備註)</span>
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={storeName}
+                  className="w-full px-3.5 py-2 bg-amber-100/70 border border-amber-300 rounded-xl text-sm font-bold text-amber-950 cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {storeAddress && (
+              <div className="flex items-center space-x-1.5 text-xs text-stone-600 pl-1">
+                <MapPin className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>門市地址：{storeAddress}</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 3. 送達/取貨日期與 Email 通知 */}
+        {/* 3. 希望送達日期、寄件人EMAIL、商品備註 */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-amber-950 flex items-center space-x-2 border-b border-amber-100 pb-2">
             <Truck className="w-5 h-5 text-amber-700" />
-            <span>2. 日期與聯絡偏好</span>
+            <span>2. 希望送達日期、Email 確認信與商品備註</span>
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center space-x-1">
                 <Calendar className="w-3.5 h-3.5 text-amber-700" />
-                <span>{deliveryMethod === 'self_pickup' ? '希望現場取貨日期 (選填)' : '希望送達日期 (選填)'}</span>
+                <span>希望送達日期 (選填，將寫入 Google Sheet 與備註)</span>
               </label>
               <input
                 type="date"
@@ -655,85 +692,52 @@ export const OrderForm: React.FC = () => {
                 onChange={(e) => setExpectedDeliveryDate(e.target.value)}
                 className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-amber-500"
               />
-              <span className="text-[11px] text-amber-800 mt-1 block font-medium">
-                📦 {deliveryMethod === 'self_pickup' ? '現場自取預計 9/1 起供取貨' : '預計 9/1 起依照訂單順序陸續出貨'}
-              </span>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                買家 Email (填寫將寄送訂單確認信)
+              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center space-x-1">
+                <Mail className="w-3.5 h-3.5 text-amber-700" />
+                <span>寄件人/買家 EMAIL (若有填寫將自動發送 Email 訂單確認信)</span>
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="例如：name@example.com"
-                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
+                className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/70 border border-stone-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition text-base sm:text-sm"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-stone-700 mb-1">
-              商品備註 (選填)
+              額外商品備註 (選填)
             </label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="如有特殊需求或贈禮卡片說明請在此填寫"
-              className="w-full px-3.5 py-3 sm:py-2.5 bg-stone-50/50 border border-stone-300 rounded-xl text-base sm:text-sm focus:bg-white focus:ring-2 focus:ring-amber-500"
+              placeholder="如有其他特殊需求請在此填寫..."
+              className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-stone-300 rounded-xl text-base sm:text-sm focus:bg-white focus:ring-2 focus:ring-amber-500"
             />
           </div>
-        </div>
 
-        {/* 4. 發票說明 (妮邦廚房依法免開統一發票) */}
-        <div className="space-y-3 bg-amber-50/60 p-4 rounded-2xl border border-amber-200">
-          <h3 className="text-base font-bold text-amber-950 flex items-center space-x-2">
-            <FileText className="w-5 h-5 text-amber-700" />
-            <span>3. 發票開立說明</span>
-          </h3>
-
-          <div className="text-xs text-stone-700 leading-relaxed space-y-1">
-            <p className="font-semibold text-amber-900">
-              💡 妮邦廚房依法為小規模營業人，免用統一發票。
-            </p>
-            <p>
-              本訂單依法免開立統一發票。如您或公司需「小規模營業人免用統一發票收據」（可作為報帳憑證），請於下方勾選。
-            </p>
-          </div>
-
-          <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-amber-900 pt-1">
-            <input
-              type="checkbox"
-              checked={needReceipt}
-              onChange={(e) => setNeedReceipt(e.target.checked)}
-              className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
-            />
-            <span>需隨貨附上「免用統一發票收據」</span>
-          </label>
-
-          {needReceipt && (
-            <div className="pt-2">
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                收據抬頭 / 買方名稱 (選填)
-              </label>
-              <input
-                type="text"
-                value={receiptTitle}
-                onChange={(e) => setReceiptTitle(e.target.value)}
-                placeholder="例如：妮邦股份有限公司"
-                className="w-full sm:w-1/2 px-3.5 py-2 bg-white border border-stone-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500"
-              />
+          {/* 自動組合之 Google Sheet 商品備註預覽 */}
+          <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-xs text-stone-600 space-y-1">
+            <div className="font-bold text-stone-800 flex items-center space-x-1.5">
+              <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+              <span>將自動寫入 Google Sheet「商品備註」欄位的完整內容：</span>
             </div>
-          )}
+            <div className="font-mono text-amber-950 bg-white p-2 rounded-lg border border-stone-200 break-all">
+              {compiledItemNotesPreview}
+            </div>
+          </div>
         </div>
 
-        {/* 5. 4碼圖形驗證碼 */}
+        {/* 4. 四碼圖形驗證碼 */}
         <div className="bg-stone-50 p-4 sm:p-5 rounded-2xl border border-stone-200 space-y-3">
           <label className="block text-xs font-bold text-stone-800">
-            請輸入下方 4 位圖形驗證碼 <span className="text-red-500">*</span>
+            請輸入下方 4 碼圖形驗證碼 <span className="text-red-500">*</span>
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
             <Captcha onCodeChange={setCorrectCaptcha} />
@@ -743,15 +747,15 @@ export const OrderForm: React.FC = () => {
               maxLength={4}
               value={captchaInput}
               onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
-              placeholder="輸入驗證碼"
-              className="w-36 px-4 py-2.5 text-center text-lg font-mono font-bold uppercase tracking-widest bg-white border-2 border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              placeholder="輸入4碼驗證碼"
+              className="w-44 px-4 py-2.5 text-center text-lg font-mono font-bold uppercase tracking-widest bg-white border-2 border-amber-400 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
             />
           </div>
         </div>
 
         {/* 錯誤訊息 Alert */}
         {errorMessage && (
-          <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+          <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -761,104 +765,118 @@ export const OrderForm: React.FC = () => {
         <div className="pt-2">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="w-full py-4 px-6 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-700 hover:to-amber-900 text-white font-serif font-bold text-lg rounded-2xl shadow-lg hover:shadow-glow transition duration-200 flex items-center justify-center space-x-2 cursor-pointer border border-amber-400/30"
+            disabled={isSubmitting || selectedProduct.status !== 'available'}
+            className={`w-full py-4 px-6 font-serif font-bold text-lg rounded-2xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 cursor-pointer border ${
+              selectedProduct.status === 'available'
+                ? 'bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-700 hover:to-amber-900 text-white border-amber-400/30 hover:shadow-glow'
+                : 'bg-stone-300 text-stone-600 border-stone-300 cursor-not-allowed'
+            }`}
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-6 h-6 animate-spin text-amber-200" />
-                <span>訂單寫入中...</span>
+                <span>驗證並寫入 Google Sheet 訂單中...</span>
               </>
+            ) : selectedProduct.status !== 'available' ? (
+              <span>此商品目前「{selectedProduct.statusBadgeText}」無法下單</span>
             ) : (
               <>
                 <CheckCircle2 className="w-6 h-6 text-amber-200" />
-                <span>確認預訂中秋聯名禮盒 (總金額 NT$ {pricingInfo.totalAmount.toLocaleString()})</span>
+                <span>
+                  確認送出訂單：{selectedProduct.name} {quantity} {selectedProduct.unit}（總計 NT${' '}
+                  {pricingInfo.totalAmount.toLocaleString()}）
+                </span>
               </>
             )}
           </button>
           <p className="text-center text-xs text-stone-500 mt-2">
-            {deliveryMethod === 'self_pickup' ? '選擇現場自取，免運費 ($0)。' : '送出訂單後將自動寫入相容 7-11 賣貨便匯入格式。'}
+            送出後將自動寫入 Google Sheet（相容 7-11 賣貨便_訂單匯入.xlsm 格式），若有填寫 Email 將同步寄發確認信。
           </p>
         </div>
       </form>
 
       {/* 訂單完成 Modal */}
       {completedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-amber-200 animate-in fade-in zoom-in duration-300">
-            <div className="text-center space-y-3">
-              <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-amber-200 animate-in fade-in zoom-in duration-300 my-8">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
               <h3 className="text-2xl font-bold font-serif text-amber-950">
-                預訂成功！完成訂單
+                完成訂單！感謝您的預訂
               </h3>
-              <p className="text-sm text-stone-600">
-                我們已收到您的【妮邦廚房 Ｘ 歐伯芒果】中秋聯名禮盒預訂單。
+              <p className="text-xs sm:text-sm text-stone-600">
+                您的訂單已成功送出並寫入 Google Sheet 訂單系統。
+                {completedOrder.email && (
+                  <span className="block text-emerald-700 font-semibold mt-1">
+                    ✉️ 已同步發送訂單確認信至：{completedOrder.email}
+                  </span>
+                )}
               </p>
             </div>
 
-            <div className="my-6 bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-2.5 text-sm text-stone-800">
-              <div className="flex justify-between items-center border-b border-amber-200/60 pb-2">
-                <span className="text-stone-500 text-xs">訂單編號：</span>
-                <span className="font-mono font-bold text-amber-900 text-base">
+            <div className="mt-5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-2 text-xs sm:text-sm">
+              <div className="flex justify-between py-1 border-b border-amber-200/60">
+                <span className="text-stone-500">訂單編號</span>
+                <span className="font-mono font-bold text-amber-900">
                   {completedOrder.orderId}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">取貨方式：</span>
-                <span className="font-bold text-amber-900">
-                  {completedOrder.deliveryMethod === 'self_pickup' ? '現場自取 (免運)' : '7-11 店到店冷凍配送'}
+              <div className="flex justify-between py-1 border-b border-amber-200/60">
+                <span className="text-stone-500">訂購商品 / 溫層</span>
+                <span className="font-bold text-stone-800">
+                  {completedOrder.productName} × {completedOrder.quantity} 盒（{completedOrder.tempZone}）
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">禮盒數量：</span>
-                <span className="font-semibold">{completedOrder.quantity} 盒</span>
+              <div className="flex justify-between py-1 border-b border-amber-200/60">
+                <span className="text-stone-500">收件人姓名 / 手機</span>
+                <span className="font-semibold text-stone-800">
+                  {completedOrder.recipientName} / {completedOrder.recipientPhone}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">商品小計：</span>
-                <span className="font-semibold">NT$ {completedOrder.orderAmount.toLocaleString()}</span>
+              <div className="flex justify-between py-1 border-b border-amber-200/60">
+                <span className="text-stone-500">7-11 取件門市 (代碼)</span>
+                <span className="font-bold text-amber-900">
+                  {completedOrder.storeName} ({completedOrder.storeCode})
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">運費金額：</span>
-                <span className="font-semibold">{completedOrder.shippingFee === 0 ? <span className="text-emerald-700 font-bold">免運費 ($0)</span> : `NT$ ${completedOrder.shippingFee}`}</span>
+              <div className="flex justify-between py-1 border-b border-amber-200/60">
+                <span className="text-stone-500">買家下訂日期 / 希望送達日</span>
+                <span className="font-semibold text-stone-800">
+                  {completedOrder.orderDate} ／ {completedOrder.expectedDeliveryDate}
+                </span>
               </div>
-              <div className="flex justify-between border-t border-amber-200/60 pt-2">
-                <span className="text-stone-500 font-bold">應付總金額：</span>
-                <span className="font-extrabold text-amber-700 text-lg">
+              <div className="py-1 border-b border-amber-200/60">
+                <span className="text-stone-500 block mb-1">寫入備註內容</span>
+                <span className="text-xs font-mono text-stone-700 bg-white p-2 rounded border border-amber-200 block">
+                  {completedOrder.compiledItemNotes}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-amber-200/60">
+                <span className="text-stone-500">訂單金額 ＋ 運費金額</span>
+                <span className="font-semibold text-stone-800">
+                  NT$ {completedOrder.orderAmount.toLocaleString()} ＋ NT$ {completedOrder.shippingFee}
+                </span>
+              </div>
+              <div className="flex justify-between py-2 text-base">
+                <span className="font-bold text-amber-950">應付總金額</span>
+                <span className="font-extrabold text-amber-700 font-serif">
                   NT$ {completedOrder.totalAmount.toLocaleString()}
                 </span>
               </div>
-              <div className="flex justify-between pt-1">
-                <span className="text-stone-500">取件人：</span>
-                <span className="font-semibold">{completedOrder.recipientName} ({completedOrder.recipientPhone})</span>
-              </div>
-              {completedOrder.deliveryMethod === '7-11' && (
-                <div className="flex justify-between items-start">
-                  <span className="text-stone-500 shrink-0">7-11 取件門市：</span>
-                  <div className="text-right font-medium text-amber-900 text-xs">
-                    <div>{completedOrder.storeName} (店號: {completedOrder.storeCode})</div>
-                    {completedOrder.storeAddress && <div className="text-[11px] text-stone-500">{completedOrder.storeAddress}</div>}
-                  </div>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-stone-500">{completedOrder.deliveryMethod === 'self_pickup' ? '希望取貨日期：' : '希望送達日期：'}</span>
-                <span className="font-medium">{completedOrder.expectedDeliveryDate}</span>
-              </div>
             </div>
 
-            <div className="space-y-3">
-              <button
-                onClick={() => setCompletedOrder(null)}
-                className="w-full py-3 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl transition shadow-md cursor-pointer"
-              >
-                完成並關閉
-              </button>
-              <div className="text-center text-xs text-stone-500">
-                如有疑問請洽專線：<a href="tel:0989518831" className="text-amber-800 font-bold underline">0989518831</a>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCompletedOrder(null);
+                setCaptchaInput('');
+              }}
+              className="mt-6 w-full py-3 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-xl shadow transition cursor-pointer"
+            >
+              完成並返回商品頁面
+            </button>
           </div>
         </div>
       )}
