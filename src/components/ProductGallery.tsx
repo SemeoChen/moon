@@ -104,7 +104,11 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
 
       {/* 縮圖輪播選擇條 */}
       {safeImages.length > 1 && (
-        <div className="grid grid-cols-4 gap-2.5 sm:gap-3 mt-3.5">
+        <div
+          className={`grid gap-2.5 sm:gap-3 mt-3.5 ${
+            safeImages.length === 3 ? 'grid-cols-3' : 'grid-cols-4'
+          }`}
+        >
           {safeImages.map((img, idx) => (
             <button
               type="button"
