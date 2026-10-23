@@ -85,6 +85,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
   // 圖形驗證碼
   const [correctCaptcha, setCorrectCaptcha] = useState<string>('');
   const [captchaInput, setCaptchaInput] = useState<string>('');
+  const [captchaResetKey, setCaptchaResetKey] = useState<number>(0);
 
   // 提交狀態與完成訂單彈窗
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -112,9 +113,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
   const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCity = e.target.value;
     setSelectedCity(newCity);
-    const districts = STORES_DB[newCity] ? Object.keys(STORES_DB[newCity]) : [];
+    const districts =
+      newCity && STORES_DB[newCity] ? Object.keys(STORES_DB[newCity]) : [];
     if (districts.length > 0) {
       setSelectedDistrict(districts[0]);
+    } else {
+      setSelectedDistrict('');
     }
   };
 
@@ -143,6 +147,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
       setStoreCode(found.id);
       setStoreName(`7-11 ${found.name}門市`);
       setStoreAddress(found.address);
+    } else {
+      setStoreCode('');
+      setStoreName('');
+      setStoreAddress('');
     }
   };
 
@@ -288,6 +296,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
           email: email.trim(),
           compiledItemNotes: compiledItemNotesPreview,
         });
+
+        // 送出訂單後：保留收件人(訂購人)姓名、電話及 Email，其餘輸入欄位清除，並重設圖形驗證碼
+        setSelectedCity('');
+        setSelectedDistrict('');
+        setSelectedStoreId('');
+        setStoreCode('');
+        setStoreName('');
+        setStoreAddress('');
+        setExpectedDeliveryDate('');
+        setNotes('');
+        setQuantity(1);
+        setCaptchaInput('');
+        setCaptchaResetKey((prev) => prev + 1);
       } else {
         setErrorMessage(resData.message || '訂單送出失敗，請稍後再試。');
       }
@@ -594,6 +615,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
                   onChange={handleCityChange}
                   className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
                 >
+                  <option value="">-- 請選擇縣市 --</option>
                   {cityList.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -611,6 +633,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
                   onChange={(e) => setSelectedDistrict(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-base sm:text-sm font-medium focus:ring-2 focus:ring-amber-500"
                 >
+                  <option value="">-- 請選擇行政區 --</option>
                   {districtList.map((d) => (
                     <option key={d} value={d}>
                       {d}
@@ -628,6 +651,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
                   onChange={handleStoreSelectChange}
                   className="w-full px-3.5 py-2.5 bg-white border-2 border-amber-500 rounded-xl text-base sm:text-sm font-bold text-amber-950 focus:ring-2 focus:ring-amber-500"
                 >
+                  <option value="">-- 請選擇 7-11 門市 --</option>
                   {storeOptions.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}門市 (代碼:{s.id})
@@ -740,7 +764,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({ selectedProduct }) => {
             請輸入下方 4 碼圖形驗證碼 <span className="text-red-500">*</span>
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-            <Captcha onCodeChange={setCorrectCaptcha} />
+            <Captcha
+              onCodeChange={setCorrectCaptcha}
+              refreshKey={captchaResetKey}
+            />
             <input
               type="text"
               required

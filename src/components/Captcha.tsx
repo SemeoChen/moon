@@ -5,9 +5,10 @@ import { RotateCw } from 'lucide-react';
 
 interface CaptchaProps {
   onCodeChange: (code: string) => void;
+  refreshKey?: number;
 }
 
-export const Captcha: React.FC<CaptchaProps> = ({ onCodeChange }) => {
+export const Captcha: React.FC<CaptchaProps> = ({ onCodeChange, refreshKey = 0 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [captchaText, setCaptchaText] = useState<string>('');
 
@@ -87,7 +88,7 @@ export const Captcha: React.FC<CaptchaProps> = ({ onCodeChange }) => {
 
   useEffect(() => {
     refreshCaptcha();
-  }, []);
+  }, [refreshKey, refreshCaptcha]);
 
   return (
     <div className="flex items-center space-x-3">
