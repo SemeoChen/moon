@@ -46,6 +46,7 @@ export interface ProductCategory {
   badge?: string;
   description: string;
   isUnderConstruction?: boolean;
+  hidden?: boolean;
 }
 
 export const PRODUCT_CATEGORIES: ProductCategory[] = [
@@ -55,6 +56,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
     badge: '人氣主打',
     description: '嚴選台南官田陽光熟成芒果，結合頂級食材手工精製的招牌芒果系列。',
     isUnderConstruction: false,
+    hidden: false,
   },
   {
     id: 'cake',
@@ -62,6 +64,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
     badge: '建置中',
     description: '甜點師細緻手藝打造：裱花蛋糕、翻糖蛋糕、戚風蛋糕、巴斯克乳酪蛋糕。',
     isUnderConstruction: true,
+    hidden: true,
   },
   {
     id: 'cookie',
@@ -69,6 +72,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
     badge: '建置中',
     description: '嚴選法國發酵奶油與天然食材手工烘焙，酥脆香濃的手作餅乾系列。',
     isUnderConstruction: true,
+    hidden: true,
   },
 ];
 

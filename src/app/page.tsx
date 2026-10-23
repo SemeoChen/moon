@@ -41,13 +41,23 @@ export default function Home() {
   );
   const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
 
+  // 僅顯示未隱藏之商品分類與商品（目前隱藏蛋糕類與餅乾類）
+  const visibleCategories = useMemo(
+    () => PRODUCT_CATEGORIES.filter((cat) => !cat.hidden),
+    []
+  );
+  const visibleProducts = useMemo(() => {
+    const visibleCatIds = new Set(visibleCategories.map((c) => c.id));
+    return PRODUCTS.filter((p) => visibleCatIds.has(p.categoryId));
+  }, [visibleCategories]);
+
   // 讀取 localStorage 中管理者設定的主打商品
   useEffect(() => {
     try {
       const saved = localStorage.getItem(FEATURED_STORAGE_KEY);
-      if (saved && PRODUCTS.some((p) => p.id === saved)) {
+      if (saved && visibleProducts.some((p) => p.id === saved)) {
         setFeaturedProductId(saved);
-        const found = PRODUCTS.find((p) => p.id === saved);
+        const found = visibleProducts.find((p) => p.id === saved);
         if (found) {
           setSelectedCategoryId(found.categoryId);
           setSelectedProductId(found.id);
@@ -56,28 +66,30 @@ export default function Home() {
     } catch {
       // ignore storage errors
     }
-  }, []);
+  }, [visibleProducts]);
 
   const featuredProduct: ProductItem = useMemo(() => {
     return (
-      PRODUCTS.find((p) => p.id === featuredProductId) || PRODUCTS[0]
+      visibleProducts.find((p) => p.id === featuredProductId) ||
+      visibleProducts[0] ||
+      PRODUCTS[0]
     );
-  }, [featuredProductId]);
+  }, [featuredProductId, visibleProducts]);
 
   const currentCategoryProducts = useMemo(() => {
-    return PRODUCTS.filter((p) => p.categoryId === selectedCategoryId);
-  }, [selectedCategoryId]);
+    return visibleProducts.filter((p) => p.categoryId === selectedCategoryId);
+  }, [selectedCategoryId, visibleProducts]);
 
   const selectedProduct: ProductItem = useMemo(() => {
     return (
-      PRODUCTS.find((p) => p.id === selectedProductId) || featuredProduct
+      visibleProducts.find((p) => p.id === selectedProductId) || featuredProduct
     );
-  }, [selectedProductId, featuredProduct]);
+  }, [selectedProductId, featuredProduct, visibleProducts]);
 
   // 切換大分類頁籤
   const handleSelectCategory = (catId: ProductCategoryId) => {
     setSelectedCategoryId(catId);
-    const prodsInCat = PRODUCTS.filter((p) => p.categoryId === catId);
+    const prodsInCat = visibleProducts.filter((p) => p.categoryId === catId);
     // 若該分類包含目前主打商品則優先選取主打商品，否則選第一個
     const featuredInCat = prodsInCat.find((p) => p.id === featuredProductId);
     if (featuredInCat) {
@@ -196,9 +208,17 @@ export default function Home() {
             )}
           </div>
 
-          {/* 第一層：三大商品類別頁籤 (芒果類 / 蛋糕類 / 餅乾類) */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-            {PRODUCT_CATEGORIES.map((cat) => {
+          {/* 第一層：商品類別頁籤 (目前僅顯示芒果類，蛋糕類與餅乾類暫時隱藏) */}
+          <div
+            className={`grid gap-2.5 sm:gap-4 ${
+              visibleCategories.length === 1
+                ? 'grid-cols-1'
+                : visibleCategories.length === 2
+                ? 'grid-cols-2'
+                : 'grid-cols-3'
+            }`}
+          >
+            {visibleCategories.map((cat) => {
               const isSelected = selectedCategoryId === cat.id;
               return (
                 <button
@@ -500,7 +520,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 gap-5">
             {/* 芒果類卡片 */}
             <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 space-y-3">
               <div className="flex items-center justify-between border-b border-amber-200 pb-2">
@@ -511,13 +531,13 @@ export default function Home() {
                   熱銷主打
                 </span>
               </div>
-              <div className="space-y-2 text-xs sm:text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs sm:text-sm">
                 {PRODUCTS.filter((p) => p.categoryId === 'mango').map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => handleSelectProduct(p)}
-                    className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
+                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
                       selectedProduct.id === p.id
                         ? 'bg-amber-900 text-white border-amber-900 font-bold'
                         : 'bg-white text-stone-800 border-amber-200 hover:bg-amber-100/60'
@@ -542,71 +562,6 @@ export default function Home() {
                     </span>
                   </button>
                 ))}
-              </div>
-            </div>
-
-            {/* 蛋糕類卡片 */}
-            <div className="bg-stone-50 p-5 rounded-2xl border border-stone-200 space-y-3">
-              <div className="flex items-center justify-between border-b border-stone-200 pb-2">
-                <h4 className="font-serif font-bold text-lg text-stone-800">
-                  🎂 蛋糕類
-                </h4>
-                <span className="text-xs bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-bold">
-                  建置中
-                </span>
-              </div>
-              <div className="space-y-2 text-xs sm:text-sm">
-                {PRODUCTS.filter((p) => p.categoryId === 'cake').map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSelectProduct(p)}
-                    className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
-                      selectedProduct.id === p.id
-                        ? 'bg-amber-900 text-white border-amber-900 font-bold'
-                        : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
-                    }`}
-                  >
-                    <span>{p.name}</span>
-                    <span className="text-[11px] bg-stone-200 text-stone-600 px-2 py-0.5 rounded-full">
-                      {p.statusBadgeText}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 餅乾類卡片 */}
-            <div className="bg-stone-50 p-5 rounded-2xl border border-stone-200 space-y-3">
-              <div className="flex items-center justify-between border-b border-stone-200 pb-2">
-                <h4 className="font-serif font-bold text-lg text-stone-800">
-                  🍪 餅乾類
-                </h4>
-                <span className="text-xs bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-bold">
-                  建置中
-                </span>
-              </div>
-              <div className="space-y-2 text-xs sm:text-sm">
-                {PRODUCTS.filter((p) => p.categoryId === 'cookie').map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSelectProduct(p)}
-                    className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
-                      selectedProduct.id === p.id
-                        ? 'bg-amber-900 text-white border-amber-900 font-bold'
-                        : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
-                    }`}
-                  >
-                    <span>{p.name}</span>
-                    <span className="text-[11px] bg-stone-200 text-stone-600 px-2 py-0.5 rounded-full">
-                      {p.statusBadgeText}
-                    </span>
-                  </button>
-                ))}
-                <div className="p-3 rounded-xl bg-white/80 border border-dashed border-stone-300 text-xs text-stone-500">
-                  更多手工餅乾品項陸續建置上架中，敬請期待！
-                </div>
               </div>
             </div>
           </div>
@@ -679,7 +634,7 @@ export default function Home() {
             </p>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {PRODUCTS.map((prod) => {
+              {visibleProducts.map((prod) => {
                 const isCurrentFeatured = prod.id === featuredProductId;
                 return (
                   <button
